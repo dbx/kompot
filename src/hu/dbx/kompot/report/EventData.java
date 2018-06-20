@@ -2,80 +2,67 @@ package hu.dbx.kompot.report;
 
 import hu.dbx.kompot.impl.DataHandling;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
-public class EventData {
+public final class EventData {
 
-    private UUID uuid;
-    private String eventTarget;
-    private String eventType;
-    private DataHandling.Statuses eventStatus;
-    private String data;
-    private String groups;
-    private String sender;
-    private String firstSent;
+    private final UUID uuid;
+    private final String eventTarget;
+    private final String eventType;
+    private final DataHandling.Statuses eventStatus;
+    private final String data;
+    private final String groups;
+    private final String sender;
+    private final LocalDateTime firstSent;
+
+    public EventData(UUID uuid,
+                     String eventTarget,
+                     String eventType,
+                     DataHandling.Statuses eventStatus,
+                     String data,
+                     String groups,
+                     String sender,
+                     LocalDateTime firstSent) {
+        this.uuid = uuid;
+        this.eventTarget = eventTarget;
+        this.eventType = eventType;
+        this.eventStatus = eventStatus;
+        this.data = data;
+        this.groups = groups;
+        this.sender = sender;
+        this.firstSent = firstSent;
+    }
 
     public UUID getUuid() {
         return uuid;
-    }
-
-    public void setUuid(UUID uuid) {
-        this.uuid = uuid;
     }
 
     public String getEventTarget() {
         return eventTarget;
     }
 
-    public void setEventTarget(String eventTarget) {
-        this.eventTarget = eventTarget;
-    }
-
     public String getEventType() {
         return eventType;
-    }
-
-    public void setEventType(String eventType) {
-        this.eventType = eventType;
     }
 
     public DataHandling.Statuses getEventStatus() {
         return eventStatus;
     }
 
-    public void setEventStatus(DataHandling.Statuses eventStatus) {
-        this.eventStatus = eventStatus;
-    }
-
     public String getData() {
         return data;
-    }
-
-    public void setData(String data) {
-        this.data = data;
     }
 
     public String getGroups() {
         return groups;
     }
 
-    public void setGroups(String groups) {
-        this.groups = groups;
-    }
-
     public String getSender() {
         return sender;
     }
 
-    public void setSender(String sender) {
-        this.sender = sender;
-    }
-
-    public String getFirstSent() {
+    public LocalDateTime getFirstSent() {
         return firstSent;
-    }
-
-    public void setFirstSent(String firstSent) {
-        this.firstSent = firstSent;
     }
 }

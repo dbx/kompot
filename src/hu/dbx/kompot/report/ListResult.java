@@ -1,43 +1,32 @@
 package hu.dbx.kompot.report;
 
-@SuppressWarnings("unused")
-class ListResult<X> {
+final class ListResult<T> {
 
-    private int from;
-    private int limit;
-    private int total;
-    private Iterable<X> items;
+    private final int from;
+    private final int limit;
+    private final int total;
+    private final Iterable<T> items;
 
+    ListResult(int from, int limit, int total, Iterable<T> items) {
+        this.from = from;
+        this.limit = limit;
+        this.total = total;
+        this.items = items;
+    }
 
     public int getFrom() {
         return from;
-    }
-
-    public void setFrom(int from) {
-        this.from = from;
     }
 
     public int getLimit() {
         return limit;
     }
 
-    public void setLimit(int limit) {
-        this.limit = limit;
-    }
-
     public int getTotal() {
         return total;
     }
 
-    public void setTotal(int total) {
-        this.total = total;
-    }
-
-    public Iterable<X> getItems() {
+    public Iterable<T> getItems() {
         return items;
-    }
-
-    public void setItems(Iterable<X> items) {
-        this.items = items;
     }
 }

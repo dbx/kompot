@@ -2,19 +2,15 @@ package hu.dbx.kompot.report;
 
 import hu.dbx.kompot.impl.DataHandling;
 
-public class EventFilters {
+public final class EventFilters {
 
-//    //az esemény cél feldolgozója (modulja)
-//    private String target;
+    private final DataHandling.Statuses eventStatus;
 
-    //az esemény állapota
-    private DataHandling.Statuses eventStatus;
+    public EventFilters(DataHandling.Statuses eventStatus) {
+        this.eventStatus = eventStatus;
+    }
 
     public DataHandling.Statuses getEventStatus() {
         return eventStatus;
-    }
-
-    public void setEventStatus(DataHandling.Statuses eventStatus) {
-        this.eventStatus = eventStatus;
     }
 }
