@@ -110,13 +110,12 @@ public final class CommunicationEndpoint {
      * @param data      a keres adattartama
      * @param <TReq>    a keres tipusa
      * @param <TRes>    a valasz tipusa
-     * @param timeoutMs a hívás timeoutja ms-ben
      * @return a hivas eredmenyt becsomagolva
      * @throws SerializationException ha nem tudtuk a peldanyt szerializalni
      * @throws IllegalStateException  ha nem fut a komponens
      */
-    public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data, long timeoutMs) throws SerializationException, IllegalStateException {
-        return producer.sendMessage(method, data, timeoutMs);
+    public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data) throws SerializationException, IllegalStateException {
+        return producer.sendMessage(method, data);
     }
 
     /**

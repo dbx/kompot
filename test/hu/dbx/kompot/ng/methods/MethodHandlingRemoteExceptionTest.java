@@ -47,7 +47,7 @@ public class MethodHandlingRemoteExceptionTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 100_000);
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11));
 
         try {
             response.get(10, TimeUnit.SECONDS);

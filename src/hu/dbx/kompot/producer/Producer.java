@@ -1,9 +1,9 @@
 package hu.dbx.kompot.producer;
 
-import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
+import hu.dbx.kompot.exceptions.SerializationException;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -39,12 +39,11 @@ public interface Producer {
      * @param methodData a kuldendo metodus parameter objektuma
      * @param <TReq>     a parameter tipusa
      * @param <TRes>     a valasz tipusa
-     * @param timeoutMs a hívás timeoutja ms-ben
      * @return a future that completes when method response has arrived.
      * @throws SerializationException   when could not serialize method data
      * @throws IllegalArgumentException when any argument is null
      */
-    <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData, long timeoutMs) throws SerializationException;
+    <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData) throws SerializationException;
 
 
     /**

@@ -46,7 +46,7 @@ public class MethodHandlingTimeoutTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 100);
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100), singletonMap("aa", 11));
         executor.awaitTermination(1, TimeUnit.SECONDS);
 
         assertTrue(response.isCancelled());
@@ -68,9 +68,9 @@ public class MethodHandlingTimeoutTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 100);
-        CompletableFuture<Map> response2 = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 2000);
-        CompletableFuture<Map> response3 = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 4000);
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100), singletonMap("aa", 11));
+        CompletableFuture<Map> response2 = producer.syncCallMethod(METHOD_1.withTimeout(2000), singletonMap("aa", 11));
+        CompletableFuture<Map> response3 = producer.syncCallMethod(METHOD_1.withTimeout(4000), singletonMap("aa", 11));
 
         executor.awaitTermination(1, TimeUnit.SECONDS);
 
@@ -114,7 +114,7 @@ public class MethodHandlingTimeoutTest {
         producer.start();
 
         Thread.sleep(1000);
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 100);
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100), singletonMap("aa", 11));
 
         try {
             response.get(3, TimeUnit.SECONDS);
@@ -145,7 +145,7 @@ public class MethodHandlingTimeoutTest {
         producer.start();
 
         Thread.sleep(1000);
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 500);
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(500), singletonMap("aa", 11));
 
         executor.awaitTermination(1, TimeUnit.SECONDS);
 

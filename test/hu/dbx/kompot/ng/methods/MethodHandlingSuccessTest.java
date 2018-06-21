@@ -6,8 +6,8 @@ import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
-import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.producer.EventGroupProvider;
 import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -50,7 +50,7 @@ public class MethodHandlingSuccessTest {
         producer.start();
 
         Thread.sleep(1000);
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1, singletonMap("aa", 11), 100_000);
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11));
 
         assertEquals(1, response.get(3, TimeUnit.SECONDS).get("a"));
 

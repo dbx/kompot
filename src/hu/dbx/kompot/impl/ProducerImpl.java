@@ -87,7 +87,7 @@ public final class ProducerImpl implements Producer {
     }
 
     @Override
-    public <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData, long timeoutMs) throws SerializationException {
+    public <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData) throws SerializationException {
         if (marker == null) {
             throw new IllegalArgumentException("Can not send async message for null marker!");
         } else if (methodData == null) {
@@ -113,7 +113,7 @@ public final class ProducerImpl implements Producer {
             consumer.registerMessageFuture(getProducerIdentity(), requestFrame.getIdentifier(), () -> messageCallback(requestFrame, responseFuture));
 
             //timeout beállítása
-            scheduleMethodTimeout(requestFrame, responseFuture, timeoutMs);
+            scheduleMethodTimeout(requestFrame, responseFuture, marker.getTimeout());
 
             // megszolitjuk a cel modult
             String channel = "m:" + methodGroup;

@@ -159,7 +159,7 @@ public final class DataHandling {
         jedis.hset(methodDetailsKey, CODE.name(), frame.getMethodMarker().getMethodName());
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
         jedis.hset(methodDetailsKey, DATA.name(), serialized);
-        final int expiration = ((int) frame.getMethodMarker().getTimeout() / 1000);
+        final int expiration = ((int) Math.ceil(((double) frame.getMethodMarker().getTimeout()) / 1000));
         LOGGER.debug("Setting expiration to {} seconds on key {}", expiration, methodDetailsKey);
 
         jedis.expire(methodDetailsKey, expiration);
