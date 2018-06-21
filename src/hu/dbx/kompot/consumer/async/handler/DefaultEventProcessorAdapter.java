@@ -23,16 +23,21 @@ public final class DefaultEventProcessorAdapter implements EventProcessorAdapter
 
     @Override
     public void register(EventProcessorFactory factory) {
-        factories.add(factory);
+        if (factory == null) {
+            throw new IllegalArgumentException("Factory must not be null!");
+        } else {
+            factories.add(factory);
+        }
     }
 
     @Override
     public <TReq> void handle(EventDescriptor<TReq> eventMarker, TReq request, EventStatusCallback callback) {
         Optional<SelfDescribingEventProcessor<TReq>> processor = create(eventMarker);
-        if (!processor.isPresent())
+        if (!processor.isPresent()) {
             throw new IllegalArgumentException("Can not handle event!");
-        else
+        } else {
             processor.get().handle(request, callback);
+        }
     }
 
     @Override
@@ -54,9 +59,10 @@ public final class DefaultEventProcessorAdapter implements EventProcessorAdapter
 
     @Override
     public Optional<EventDescriptor> resolveMarker(String eventName) {
-        if (null == eventName || eventName.isEmpty())
+        if (null == eventName || eventName.isEmpty()) {
             throw new IllegalArgumentException("resolveMarker got empty eventName!");
-        else
+        } else {
             return getSupportedEvents().stream().filter(x -> x.getEventName().equalsIgnoreCase(eventName)).findAny();
+        }
     }
 }

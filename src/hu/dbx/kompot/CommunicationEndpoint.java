@@ -9,6 +9,7 @@ import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.DefaultBroadcastProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
+import hu.dbx.kompot.consumer.sync.MethodReceivingEventListener;
 import hu.dbx.kompot.consumer.sync.MethodSendingEventListener;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
@@ -119,12 +120,30 @@ public final class CommunicationEndpoint {
     }
 
     /**
-     * Felregisztral egy esemenykezelot
+     * Registers callback that is called to follow up on the lifecycle of sending a method call.
+     *
+     * @param eventListener not null callback object
+     * @throws IllegalArgumentException on null parameter
      */
-    public void registerMethodSendingEventListener(MethodSendingEventListener eventListener) {
+    public void registerMethodSendingEventListener(MethodSendingEventListener eventListener) throws IllegalArgumentException {
         producer.addMethodEventListener(eventListener);
     }
 
+    /**
+     * Registers a callback that is called to follow up on the lifecycle of receiving and processing a method call.
+     *
+     * @param eventListener not null callback object
+     * @throws IllegalArgumentException on null parameter
+     */
+    public void registerMethodReceivingEventListener(MethodReceivingEventListener eventListener) throws IllegalArgumentException {
+        consumer.addMethodEventListener(eventListener);
+    }
+
+    /**
+     * Registers a factory object that is used to generate event processors.
+     *
+     * @param factory not null.
+     */
     public void registerEventHandlers(EventProcessorFactory factory) {
         events.register(factory);
     }

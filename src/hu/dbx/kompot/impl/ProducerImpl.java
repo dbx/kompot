@@ -220,12 +220,20 @@ public final class ProducerImpl implements Producer {
         response.complete(res);
     }
 
-    public void addMethodEventListener(MethodSendingEventListener listener) {
-        this.methodEventListeners.add(listener);
+    public void addMethodEventListener(MethodSendingEventListener listener) throws IllegalArgumentException {
+        if (listener == null) {
+            throw new IllegalArgumentException("Method sending event listener must not be null!");
+        } else {
+            methodEventListeners.add(listener);
+        }
     }
 
-    public void removeMethodEventListener(MethodSendingEventListener listener) {
-        this.methodEventListeners.remove(listener);
+    public void removeMethodEventListener(MethodSendingEventListener listener) throws IllegalArgumentException {
+        if (listener == null) {
+            throw new IllegalArgumentException("Method sending event listener must not be null!");
+        } else {
+            methodEventListeners.remove(listener);
+        }
     }
 
     @Override

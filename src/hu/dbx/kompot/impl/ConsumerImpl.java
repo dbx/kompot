@@ -7,6 +7,7 @@ import hu.dbx.kompot.consumer.async.handler.EventProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastProcessorFactory;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
+import hu.dbx.kompot.consumer.sync.MethodReceivingEventListener;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.core.KeyNaming;
@@ -14,7 +15,6 @@ import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
-import hu.dbx.kompot.producer.ProducerIdentity;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPubSub;
@@ -33,7 +33,6 @@ public final class ConsumerImpl implements Consumer, Runnable {
      * TODO: make it configurable!
      */
     private static final int MAX_EVENTS = 4;
-
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     /**
@@ -42,6 +41,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
     private final AtomicInteger processingEvents = new AtomicInteger(0);
     private final ConsumerHandlers consumerHandlers;
     private final ConsumerConfig consumerConfig;
+
+    private final List<MethodReceivingEventListener> methodEventListeners = Collections.synchronizedList(new LinkedList<>());
 
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
@@ -54,7 +55,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
      * Felregisztral egy future peldanyt es var a valaszra.
      * TODO: timeout parameter is legyen!
      */
-    public final void registerMessageFuture(UUID messageUuid, Runnable runnable) {
+    void registerMessageFuture(UUID messageUuid, Runnable runnable) {
         String messageResponseChannel = consumerConfig.getNaming().getMessageResponseNotificationChannel(messageUuid);
         LOGGER.debug("Subscribing to {}", messageResponseChannel);
         pubSub.subscribe(messageResponseChannel);
@@ -85,6 +86,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 startEventProcessing(UUID.fromString(message));
             } else if (channel.startsWith("m:")) {                 // uzenet keres
                 LOGGER.debug("Received message bang {} on {}, trying to start method.", channel, message);
+                //noinspection unused
                 final String methodName = channel.substring(2);
                 try {
                     consumerConfig.getExecutor().execute(new MethodRunnable(UUID.fromString(message)));
@@ -237,6 +239,15 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     return;
                 } else {
                     store.zrem(getKeyNaming().unprocessedEventsByGroupKey(frame.get().getMethodMarker().getMethodGroupName()), frame.get().getIdentifier().toString());
+                    // esemenykezelok futtatasa
+                    methodEventListeners.forEach(x -> {
+                        try {
+                            x.onRequestReceived(frame.get());
+                        } catch (Throwable t) {
+                            LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
+                        }
+                    });
+
                 }
 
                 try {
@@ -244,12 +255,22 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     // siker eseten visszairjuk a sikeres vackot
 
                     // TODO: irjuk be a folyamatban levo esemenyes soraba!
+                    //noinspection unchecked
                     final Object response = getMethodProcessorAdapter().call(frame.get().getMethodMarker(), frame.get().getMethodData());
                     LOGGER.debug("Called method processor");
 
                     // TODO: use multi/exec here to write statuses and stuff.
                     store.hset(methodKey, DataHandling.MethodResponseKeys.RESPONSE.name(), SerializeHelper.serializeObject(response));
                     store.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), DataHandling.Statuses.PROCESSED.name());
+
+                    // esemenykezelok futtatasa
+                    methodEventListeners.forEach(x -> {
+                        try {
+                            x.onRequestProcessedSuccessfully(frame.get(), response);
+                        } catch (Throwable t) {
+                            LOGGER.error("Error when running method sending event listener for {}", t);
+                        }
+                    });
 
                     LOGGER.debug("Written response stuff");
                 } catch (Throwable t) {
@@ -260,12 +281,23 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_CLASS.name(), t.getClass().getName());
                     tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE.name(), t.getMessage());
                     tx.exec();
+
+                    // esemenykezelok futtatasa
+                    methodEventListeners.forEach(x -> {
+                        try {
+                            x.onRequestProcessingFailure(frame.get(), t);
+                        } catch (Throwable e) {
+                            LOGGER.error("Error when running method sending event listener for {} on {}", e);
+                        }
+                    });
+
                 } finally {
                     // hogy nehogy lejarjon mire megjon a valasz!
                     store.expire(methodKey, 15);
 
                     String responseNotificationChannel = getKeyNaming().getMessageResponseNotificationChannel(frame.get().getIdentifier());
                     LOGGER.debug("Notifying responging staff on {}", responseNotificationChannel);
+
                     store.publish(responseNotificationChannel, methodUuid.toString());
                 }
             } catch (Throwable e) {
@@ -388,6 +420,22 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 LOGGER.error("Error on automatic event processing: ", t);
             }
             return null;
+        }
+    }
+
+    public void addMethodEventListener(MethodReceivingEventListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Method evt listener must not be null!");
+        } else {
+            methodEventListeners.add(listener);
+        }
+    }
+
+    public void removeMethodEventListener(MethodReceivingEventListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Method sending event listener must not be null!");
+        } else {
+            methodEventListeners.remove(listener);
         }
     }
 }

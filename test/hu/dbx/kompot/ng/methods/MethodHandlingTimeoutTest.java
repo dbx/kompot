@@ -35,9 +35,6 @@ public class MethodHandlingTimeoutTest {
 
     /**
      * A producer szinkron üzenetet küld, amit senki sem dolgoz fel az adott (100ms) timeouton belül. A visszaadott future cancelled állapotba kerül.
-     *
-     * @throws InterruptedException   az awaitTermination dobhatja, nem reális eset
-     * @throws SerializationException a syncCallMethod dobhatja, nem reális eset
      */
     @Test
     public void testSingleMessageTimeout() throws InterruptedException, SerializationException {
@@ -57,9 +54,6 @@ public class MethodHandlingTimeoutTest {
 
     /**
      * Több timeoutoló üzenet helyes viselkedését vizsgáljuk. Mindegyik csak a megfelelő időben válik cancelleddé
-     *
-     * @throws InterruptedException   az awaitTermination dobhatja, nem reális eset
-     * @throws SerializationException a syncCallMethod dobhatja, nem reális eset
      */
     @Test
     public void testMultipleMessageTimeout() throws InterruptedException, SerializationException {
@@ -89,9 +83,6 @@ public class MethodHandlingTimeoutTest {
 
     /**
      * A timeoutolást nézi egy realisztikusabb scenárióban, ahol van consumer is
-     *
-     * @throws InterruptedException   az awaitTermination dobhatja, nem reális eset
-     * @throws SerializationException a syncCallMethod dobhatja, nem reális eset
      */
     @Test
     public void testGettingCancellationException() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
@@ -155,5 +146,4 @@ public class MethodHandlingTimeoutTest {
         consumer.stop();
         executor.shutdown();
     }
-
 }
