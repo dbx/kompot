@@ -3,7 +3,7 @@ package hu.dbx.kompot.consumer.sync;
 /**
  * Used in Consumers to follow up on the lifecycle of processing an method.
  */
-public interface MethodReceivingEventListener {
+public interface MethodReceivingCallback {
 
     /**
      * Request has been received, we are starting to process it.

@@ -43,7 +43,7 @@ public class MethodHandlingSuccessTest {
 
 
         final MethodLifecycleTester tester = new MethodLifecycleTester();
-        producer.registerMethodSendingEventListener(tester);
+        producer.registerMethodSendingCallback(tester);
 
         producer.start();
 

@@ -7,7 +7,7 @@ import hu.dbx.kompot.consumer.async.handler.EventProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastProcessorFactory;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
-import hu.dbx.kompot.consumer.sync.MethodReceivingEventListener;
+import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.core.KeyNaming;
@@ -42,7 +42,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
     private final ConsumerHandlers consumerHandlers;
     private final ConsumerConfig consumerConfig;
 
-    private final List<MethodReceivingEventListener> methodEventListeners = Collections.synchronizedList(new LinkedList<>());
+    private final List<MethodReceivingCallback> methodEventListeners = Collections.synchronizedList(new LinkedList<>());
 
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
@@ -423,7 +423,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
-    public void addMethodEventListener(MethodReceivingEventListener listener) {
+    public void addMethodReceivingCallback(MethodReceivingCallback listener) {
         if (listener == null) {
             throw new IllegalArgumentException("Method evt listener must not be null!");
         } else {
@@ -431,7 +431,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
-    public void removeMethodEventListener(MethodReceivingEventListener listener) {
+    public void removeMethodReceivingCallback(MethodReceivingCallback listener) {
         if (listener == null) {
             throw new IllegalArgumentException("Method sending event listener must not be null!");
         } else {

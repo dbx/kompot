@@ -5,7 +5,7 @@ import hu.dbx.kompot.consumer.async.EventFrame;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
-import hu.dbx.kompot.consumer.sync.MethodSendingEventListener;
+import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
@@ -40,7 +40,7 @@ public final class ProducerImpl implements Producer {
     private final KeyNaming keyNaming;
     private final ProducerIdentity producerIdentity;
     private final ScheduledExecutorService methodTimeoutExecutor = Executors.newSingleThreadScheduledExecutor();
-    private final List<MethodSendingEventListener> methodEventListeners = new LinkedList<>();
+    private final List<MethodSendingCallback> methodEventListeners = new LinkedList<>();
     private final JedisPool jedisPool;
     private final ConsumerImpl consumer;
 
@@ -220,7 +220,7 @@ public final class ProducerImpl implements Producer {
         response.complete(res);
     }
 
-    public void addMethodEventListener(MethodSendingEventListener listener) throws IllegalArgumentException {
+    public void addMethodSendingCallback(MethodSendingCallback listener) throws IllegalArgumentException {
         if (listener == null) {
             throw new IllegalArgumentException("Method sending event listener must not be null!");
         } else {
@@ -228,7 +228,7 @@ public final class ProducerImpl implements Producer {
         }
     }
 
-    public void removeMethodEventListener(MethodSendingEventListener listener) throws IllegalArgumentException {
+    public void removeMethodSendingCallback(MethodSendingCallback listener) throws IllegalArgumentException {
         if (listener == null) {
             throw new IllegalArgumentException("Method sending event listener must not be null!");
         } else {

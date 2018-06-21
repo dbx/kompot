@@ -1,6 +1,6 @@
 package hu.dbx.kompot.consumer.sync;
 
-public interface MethodSendingEventListener {
+public interface MethodSendingCallback {
 
     /**
      * Request has been sent now we are waiting for responses.

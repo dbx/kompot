@@ -9,8 +9,8 @@ import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.DefaultBroadcastProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
-import hu.dbx.kompot.consumer.sync.MethodReceivingEventListener;
-import hu.dbx.kompot.consumer.sync.MethodSendingEventListener;
+import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
+import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
@@ -125,8 +125,8 @@ public final class CommunicationEndpoint {
      * @param eventListener not null callback object
      * @throws IllegalArgumentException on null parameter
      */
-    public void registerMethodSendingEventListener(MethodSendingEventListener eventListener) throws IllegalArgumentException {
-        producer.addMethodEventListener(eventListener);
+    public void registerMethodSendingCallback(MethodSendingCallback eventListener) throws IllegalArgumentException {
+        producer.addMethodSendingCallback(eventListener);
     }
 
     /**
@@ -135,8 +135,8 @@ public final class CommunicationEndpoint {
      * @param eventListener not null callback object
      * @throws IllegalArgumentException on null parameter
      */
-    public void registerMethodReceivingEventListener(MethodReceivingEventListener eventListener) throws IllegalArgumentException {
-        consumer.addMethodEventListener(eventListener);
+    public void registerMethodReceivingCallback(MethodReceivingCallback eventListener) throws IllegalArgumentException {
+        consumer.addMethodReceivingCallback(eventListener);
     }
 
     /**

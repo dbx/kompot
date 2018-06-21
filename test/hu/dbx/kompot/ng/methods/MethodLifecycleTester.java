@@ -1,14 +1,14 @@
 package hu.dbx.kompot.ng.methods;
 
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
-import hu.dbx.kompot.consumer.sync.MethodSendingEventListener;
+import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 
 import java.util.*;
 
 import static hu.dbx.kompot.ng.methods.MethodLifecycleTester.Events.*;
 import static org.junit.Assert.assertEquals;
 
-final class MethodLifecycleTester implements MethodSendingEventListener {
+final class MethodLifecycleTester implements MethodSendingCallback {
 
     enum Events {SENT, RECEIVED, ERROR, TIMEOUT}
 
