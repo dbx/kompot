@@ -7,7 +7,6 @@ import java.util.UUID;
 /**
  * Default immutable implementation that assigns a random UUID on creation.
  */
-@SuppressWarnings("unused")
 public final class DefaultConsumerIdentity implements ConsumerIdentity {
     private final String identifier = UUID.randomUUID().toString();
     private final String eventGroup, messageGroup;
@@ -20,12 +19,10 @@ public final class DefaultConsumerIdentity implements ConsumerIdentity {
         this.messageGroup = messageGroup;
     }
 
-    @SuppressWarnings("unused")
     public static ConsumerIdentity fromGroups(String eventGroup, String messageGroup) {
         return new DefaultConsumerIdentity(eventGroup, messageGroup);
     }
 
-    @SuppressWarnings("unused")
     public static ConsumerIdentity groupGroup(String messageAndEventGroup) {
         return new DefaultConsumerIdentity(messageAndEventGroup, messageAndEventGroup);
     }

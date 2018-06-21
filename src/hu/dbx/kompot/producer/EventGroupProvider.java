@@ -14,7 +14,6 @@ public interface EventGroupProvider {
     /**
      * Dispatches to itself.
      */
-    @SuppressWarnings("unused")
     static EventGroupProvider identity() {
         return marker -> singletonList(marker.getEventName());
     }
@@ -22,7 +21,6 @@ public interface EventGroupProvider {
     /**
      * Dispatches to none.
      */
-    @SuppressWarnings("unused")
     static EventGroupProvider empty() {
         return marker -> emptyList();
     }

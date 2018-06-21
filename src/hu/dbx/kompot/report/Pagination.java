@@ -28,7 +28,7 @@ public final class Pagination {
         this.offset = from;
         this.limit = limit;
     }
-
+    
     public int getOffset() {
         return offset;
     }

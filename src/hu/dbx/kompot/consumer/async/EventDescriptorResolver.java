@@ -22,7 +22,6 @@ public interface EventDescriptorResolver {
     /**
      * Always resolves to a simple event.
      */
-    @SuppressWarnings("unused")
     public static final EventDescriptorResolver DEFAULT = new EventDescriptorResolver() {
         @Override
         public Optional<EventDescriptor> resolveMarker(String eventName) {

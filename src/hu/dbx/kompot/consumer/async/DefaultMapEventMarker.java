@@ -5,7 +5,6 @@ import java.util.Map;
 /**
  * Helper to define simple events that deserialize to a java map.
  */
-@SuppressWarnings("unused")
 public final class DefaultMapEventMarker implements EventDescriptor<Map> {
 
     private final String eventName;

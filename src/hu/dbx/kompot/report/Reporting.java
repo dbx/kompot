@@ -5,24 +5,24 @@ import hu.dbx.kompot.impl.DataHandling.Statuses;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
-import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
+import static java.util.stream.StreamSupport.stream;
 
 /**
  * API for status reports
  */
 public final class Reporting implements EventQueries {
 
-    private final KeyNaming keyNaming;
     private final JedisPool pool;
+    private final KeyNaming keyNaming;
 
-    public Reporting(KeyNaming naming, URI connection) {
+    public Reporting(JedisPool pool, KeyNaming naming) {
+        this.pool = pool;
         this.keyNaming = naming;
-        this.pool = new JedisPool(connection);
     }
 
     public void resend(String eventUuid, String eventGroup) {
@@ -43,12 +43,16 @@ public final class Reporting implements EventQueries {
     }
 
     @Override
-    public Iterable<EventData> queryEvents(String group, EventFilters filters, Pagination pagination) {
-        final Collection<UUID> uuids = queryEventUuids(group, filters, pagination);
+    public ListResult<EventData> queryEvents(String group, EventFilters filters, Pagination pagination) {
+        final ListResult<UUID> uuids = queryEventUuids(group, filters, pagination);
 
         try (Jedis jedis = pool.getResource()) {
-
-            return uuids.stream().map(uuid -> queryEvent(uuid, jedis)).filter(Optional::isPresent).map(Optional::get).collect(Collectors.toList());
+            final List<EventData> data = stream(uuids.spliterator(), false)
+                    .map(uuid -> queryEvent(jedis, uuid))
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .collect(Collectors.toList());
+            return new ListResult<>(pagination.getOffset(), pagination.getLimit(), data.size(), data);
         }
     }
 
@@ -58,32 +62,33 @@ public final class Reporting implements EventQueries {
             throw new IllegalArgumentException("Event uuid must not be null!");
         } else {
             try (Jedis jedis = pool.getResource()) {
-                return queryEvent(uuid, jedis);
+                return queryEvent(jedis, uuid);
             }
         }
     }
 
-    private Optional<EventData> queryEvent(UUID uuid, Jedis jedis) {
+    private Optional<EventData> queryEvent(Jedis jedis, UUID uuid) {
         final String eventDataKey = keyNaming.eventDetailsKey(uuid);
         final String eventType = jedis.hget(eventDataKey, CODE.name());
 
-        if (eventType == null)
+        if (eventType == null) {
             return Optional.empty();
+        } else {
+            final String data = jedis.hget(eventDataKey, DATA.name());
+            final String groups = jedis.hget(eventDataKey, GROUPS.name());
+            final String sender = jedis.hget(eventDataKey, SENDER.name());
+            final LocalDateTime firstSent = LocalDateTime.parse(jedis.hget(eventDataKey, FIRST_SENT.name()));
+            final Statuses eventStatus = Statuses.valueOf(jedis.hget(eventDataKey, STATUS.name()));
+            //ERROR_MSG?
 
-        final String data = jedis.hget(eventDataKey, DATA.name());
-        final String groups = jedis.hget(eventDataKey, GROUPS.name());
-        final String sender = jedis.hget(eventDataKey, SENDER.name());
-        final LocalDateTime firstSent = LocalDateTime.parse(jedis.hget(eventDataKey, FIRST_SENT.name()));
-        final Statuses eventStatus = Statuses.valueOf(jedis.hget(eventDataKey, STATUS.name()));
-        //ERROR_MSG?
+            final EventData eventData = new EventData(uuid, null, eventType, eventStatus, data, groups, sender, firstSent);
 
-        final EventData eventData = new EventData(uuid, null, eventType, eventStatus, data, groups, sender, firstSent);
-
-        return Optional.of(eventData);
+            return Optional.of(eventData);
+        }
     }
 
     @Override
-    public Collection<UUID> queryEventUuids(String group, EventFilters filters, Pagination pagination) {
+    public ListResult<UUID> queryEventUuids(String group, EventFilters filters, Pagination pagination) {
         if (group == null) {
             throw new IllegalArgumentException("Event group must not be null!");
         } else if (pagination == null) {
@@ -114,7 +119,8 @@ public final class Reporting implements EventQueries {
             }
 
             //TODO:pagination
-            return eventUuids.stream().map(UUID::fromString).collect(Collectors.toList());
+            final List<UUID> uuids = eventUuids.stream().map(UUID::fromString).collect(Collectors.toList());
+            return new ListResult<>(pagination.getOffset(), pagination.getLimit(), uuids.size(), uuids);
         }
     }
 }

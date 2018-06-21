@@ -10,7 +10,6 @@ import java.util.concurrent.CompletableFuture;
 /**
  * A kliens az esemenyek/uzenetek forrasa a rendszerben.
  */
-@SuppressWarnings("unused")
 public interface Producer {
 
     /**
@@ -47,12 +46,14 @@ public interface Producer {
      */
     <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData, long timeoutMs) throws SerializationException;
 
+
     /**
      * Kikuld egy broadcast uzenetet annak aki figyel
      *
      * @throws SerializationException ha nem tudtuk az adatot szerializalni
      */
     <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor, TReq broadcastData) throws SerializationException;
+
 
     ProducerIdentity getProducerIdentity();
 }

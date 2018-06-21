@@ -11,7 +11,6 @@ public interface ProducerIdentity {
         return () -> s;
     }
 
-    @SuppressWarnings("unused")
     static ProducerIdentity randomUuidIdentity() {
         return constantly(UUID.randomUUID().toString());
     }

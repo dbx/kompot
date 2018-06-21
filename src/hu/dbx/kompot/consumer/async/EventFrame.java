@@ -8,7 +8,6 @@ import java.util.UUID;
  *
  * @param <Req> event payload type used for serializing.
  */
-@SuppressWarnings("unused")
 public class EventFrame<Req> {
 
     /**

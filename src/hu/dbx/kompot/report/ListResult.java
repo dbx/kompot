@@ -1,6 +1,8 @@
 package hu.dbx.kompot.report;
 
-final class ListResult<T> {
+import java.util.Iterator;
+
+final class ListResult<T> implements Iterable<T> {
 
     private final int from;
     private final int limit;
@@ -14,7 +16,7 @@ final class ListResult<T> {
         this.items = items;
     }
 
-    public int getFrom() {
+    public int getOffset() {
         return from;
     }
 
@@ -26,7 +28,8 @@ final class ListResult<T> {
         return total;
     }
 
-    public Iterable<T> getItems() {
-        return items;
+    @Override
+    public Iterator<T> iterator() {
+        return items.iterator();
     }
 }

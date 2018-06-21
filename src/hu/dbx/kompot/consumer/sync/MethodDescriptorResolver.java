@@ -5,7 +5,6 @@ import java.util.Optional;
 /**
  * Used to find EventDescriptor when deserializing.
  */
-@SuppressWarnings("unused")
 public interface MethodDescriptorResolver {
 
     /**

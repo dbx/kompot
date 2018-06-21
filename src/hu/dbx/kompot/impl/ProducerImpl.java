@@ -21,6 +21,7 @@ import redis.clients.jedis.Transaction;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -31,35 +32,37 @@ import static hu.dbx.kompot.core.SerializeHelper.deserializeResponse;
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.STATUS;
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.RESPONSE;
 import static hu.dbx.kompot.impl.DataHandling.*;
-import static java.util.UUID.randomUUID;
 
-public final class ProducerImpl implements Producer, ProducerIdentity {
+public final class ProducerImpl implements Producer {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     private final EventGroupProvider provider;
     private final KeyNaming keyNaming;
-    private final String identifier = randomUUID().toString();
+    private final ProducerIdentity producerIdentity;
     private final ScheduledExecutorService methodTimeoutExecutor = Executors.newSingleThreadScheduledExecutor();
     private final List<MethodSendingEventListener> methodEventListeners = new LinkedList<>();
     private final JedisPool jedisPool;
     private final ConsumerImpl consumer;
 
-    public ProducerImpl(JedisPool pool, EventGroupProvider provider, KeyNaming keyNaming, ConsumerImpl consumer) {
-        if (provider == null || pool == null || keyNaming == null)
+    public ProducerImpl(JedisPool pool, EventGroupProvider provider, KeyNaming keyNaming, ConsumerImpl consumer, ProducerIdentity producerIdentity) {
+        if (provider == null || pool == null || keyNaming == null) {
             throw new NullPointerException("Arguments must not be null!");
+        }
 
         this.provider = provider;
         this.jedisPool = pool;
         this.keyNaming = keyNaming;
         this.consumer = consumer;
+        this.producerIdentity = producerIdentity;
     }
 
     @Override
     public <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request) throws SerializationException {
-        if (null == marker)
+        if (null == marker) {
             throw new NullPointerException("Event marker is null!");
-        if (null == request)
+        } else if (null == request) {
             throw new NullPointerException("Request object is null for marker: " + marker);
+        }
 
         final EventFrame<TReq> eventFrame = EventFrame.build(marker, request);
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
@@ -78,7 +81,6 @@ public final class ProducerImpl implements Producer, ProducerIdentity {
         }
     }
 
-
     @Override
     public EventGroupProvider getEventGroupProvider() {
         return provider;
@@ -86,13 +88,14 @@ public final class ProducerImpl implements Producer, ProducerIdentity {
 
     @Override
     public <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData, long timeoutMs) throws SerializationException {
-        if (marker == null)
+        if (marker == null) {
             throw new IllegalArgumentException("Can not send async message for null marker!");
-        if (methodData == null)
+        } else if (methodData == null) {
             throw new IllegalArgumentException("Can not send message " + marker.getMethodName() + " for empty data!");
+        }
 
         // make request object
-        final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(this, marker, methodData);
+        final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(getProducerIdentity(), marker, methodData);
 
         LOGGER.trace("Built method to send: {}", requestFrame);
 
@@ -118,13 +121,13 @@ public final class ProducerImpl implements Producer, ProducerIdentity {
             LOGGER.trace("Published on channel {}", channel);
         }
 
-        for (MethodSendingEventListener methodEventListener : methodEventListeners) {
+        methodEventListeners.forEach(methodEventListener -> {
             try {
                 methodEventListener.onRequestSent(requestFrame);
             } catch (Throwable t) {
                 LOGGER.error("Error handling requestSent event!", t);
             }
-        }
+        });
 
         return responseFuture;
     }
@@ -135,13 +138,13 @@ public final class ProducerImpl implements Producer, ProducerIdentity {
     private <TReq, TRes> void scheduleMethodTimeout(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> responseFuture, long timeoutMs) {
         methodTimeoutExecutor.schedule(() -> {
                     if (!responseFuture.isCancelled() && !responseFuture.isCompletedExceptionally() && !responseFuture.isDone()) {
-                        for (MethodSendingEventListener methodEventListener : methodEventListeners) {
+                        methodEventListeners.forEach(methodEventListener -> {
                             try {
                                 methodEventListener.onTimeOut(requestFrame);
                             } catch (Throwable t) {
                                 LOGGER.error("Error handling requestSent event!", t);
                             }
-                        }
+                        });
                         responseFuture.cancel(false);
                     }
                 }
@@ -149,41 +152,77 @@ public final class ProducerImpl implements Producer, ProducerIdentity {
     }
 
     private <TReq, TRes> void messageCallback(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
-        try (Jedis jds = jedisPool.getResource()) {
-
-            final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
-
-            // TODO: legyen multi/exec!
-            final String status = jds.hget(methodDetailsKey, STATUS.name());
-            final String data = jds.hget(methodDetailsKey, RESPONSE.name());
-            try {
-                switch (DataHandling.Statuses.valueOf(status)) {
-                    case ERROR:
-                        final MessageErrorResultException exception = deserializeException(methodDetailsKey, jds);
-                        response.completeExceptionally(exception);
-                        break;
-                    case PROCESSED:
-                        //noinspection unchecked
-                        response.complete((TRes) deserializeResponse(data, requestFrame.getMethodMarker()));
-                        break;
-                    case PROCESSING:
-                        throw new IllegalStateException("The event should not be in PROCESSED state");
-                }
-
-            } catch (DeserializationException e) {
-                response.completeExceptionally(e);
-            } finally {
-                // TODO: torojuk rediszbol ami ott maradt.
+        try (final Jedis jedis = jedisPool.getResource()) {
+            switch (methodStatus(jedis, keyNaming, requestFrame.getIdentifier())) {
+                case ERROR:
+                    methodError(keyNaming, requestFrame, response, jedis);
+                    break;
+                case PROCESSED:
+                    methodProcessed(keyNaming, requestFrame, response, jedis);
+                    break;
+                case PROCESSING:
+                    throw new IllegalStateException("The event should not be in PROCESSED state");
             }
+        } catch (DeserializationException e) {
+            response.completeExceptionally(e);
+        } finally {
+            // TODO: torojuk rediszbol ami ott maradt.
         }
     }
 
-    @SuppressWarnings("unused")
+    /**
+     * Visszaadja egy metodushivas statuszat uuid alapjan.
+     *
+     * @param jedis      jedis kapcsolat
+     * @param keyNaming  kulcs nevezesek
+     * @param methodUuid nem null metodus azonosito
+     * @return statusz objektum ami soha nem null
+     */
+    private Statuses methodStatus(Jedis jedis, KeyNaming keyNaming, UUID methodUuid) {
+        final String methodDetailsKey = keyNaming.methodDetailsKey(methodUuid);
+        return DataHandling.Statuses.valueOf(jedis.hget(methodDetailsKey, STATUS.name()));
+    }
+
+    /**
+     * Kezel egy hibas statuszura allitott metodust
+     */
+    private <TReq, TRes> void methodError(KeyNaming keyNaming, MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response, Jedis jds) {
+        final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
+        final MessageErrorResultException exception = deserializeException(methodDetailsKey, jds);
+        response.completeExceptionally(exception);
+
+        methodEventListeners.forEach(methodEventListener -> {
+            try {
+                methodEventListener.onErrorReceived(requestFrame, exception);
+            } catch (Throwable t) {
+                LOGGER.error("Error handling requestSent event!", t);
+            }
+        });
+    }
+
+    /**
+     * Kezel egy feldolgozott statuszura allitott metodust
+     */
+    private <TReq, TRes> void methodProcessed(KeyNaming keyNaming, MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response, Jedis jedis) throws DeserializationException {
+        final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
+        final String data = jedis.hget(methodDetailsKey, RESPONSE.name());
+
+        //noinspection unchecked
+        final TRes res = (TRes) deserializeResponse(data, requestFrame.getMethodMarker());
+        response.complete(res);
+        methodEventListeners.forEach(methodEventListener -> {
+            try {
+                methodEventListener.onResponseReceived(requestFrame, res);
+            } catch (Throwable t) {
+                LOGGER.error("Error handling requestSent event!", t);
+            }
+        });
+    }
+
     public void addMethodEventListener(MethodSendingEventListener listener) {
         this.methodEventListeners.add(listener);
     }
 
-    @SuppressWarnings("unused")
     public void removeMethodEventListener(MethodSendingEventListener listener) {
         this.methodEventListeners.remove(listener);
     }
@@ -205,11 +244,6 @@ public final class ProducerImpl implements Producer, ProducerIdentity {
 
     @Override
     public ProducerIdentity getProducerIdentity() {
-        return this;
-    }
-
-    @Override
-    public String getIdentifier() {
-        return identifier;
+        return producerIdentity;
     }
 }

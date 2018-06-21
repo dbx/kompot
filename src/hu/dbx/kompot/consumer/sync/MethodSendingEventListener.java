@@ -8,12 +8,12 @@ public interface MethodSendingEventListener {
     void onRequestSent(MethodRequestFrame frame);
 
     /**
-     * Method processing was successfull, received response.
+     * Method processing was successful, received response.
      */
     void onResponseReceived(MethodRequestFrame requestFrame, Object response);
 
     /**
-     * An error occured during processing the method on the other side.
+     * An error occurred during processing the method on the other side.
      */
     void onErrorReceived(MethodRequestFrame requestFrame, Throwable t);
 

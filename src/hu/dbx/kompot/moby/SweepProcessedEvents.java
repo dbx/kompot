@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * Ha egy esemeny teljesen fel van dolgozva, beirja egy adatbazisba a vegen.
  */
-public class SweepProcessedEvents {
+public final class SweepProcessedEvents {
 
     // mapet csinal amit be lehet szurni az adatbazisba
     protected <TReq> Map<String, Object> toMap(EventDescriptor<TReq> marker, TReq request) {

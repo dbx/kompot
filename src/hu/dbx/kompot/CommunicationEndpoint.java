@@ -19,6 +19,7 @@ import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import hu.dbx.kompot.producer.EventGroupProvider;
+import hu.dbx.kompot.producer.ProducerIdentity;
 import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
@@ -45,16 +46,15 @@ public final class CommunicationEndpoint {
     }
 
     public static CommunicationEndpoint ofRedisConnectionUri(URI connection, EventGroupProvider groups, ConsumerIdentity serverIdentity, ExecutorService executor) {
-        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, executor);
+        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, ProducerIdentity.randomUuidIdentity(), executor);
     }
 
-    private CommunicationEndpoint(JedisPool pool, EventGroupProvider groups, ConsumerIdentity serverIdentity, ExecutorService executor) {
+    private CommunicationEndpoint(JedisPool pool, EventGroupProvider groups, ConsumerIdentity serverIdentity, ProducerIdentity producerIdentity, ExecutorService executor) {
         final ConsumerConfig config = new ConsumerConfig(executor, serverIdentity, pool, naming);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
         this.consumer = new ConsumerImpl(config, handlers);
-        this.producer = new ProducerImpl(pool, groups, naming, this.consumer);
-
+        this.producer = new ProducerImpl(pool, groups, naming, this.consumer, producerIdentity);
     }
 
     /**

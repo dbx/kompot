@@ -14,7 +14,7 @@ import java.util.List;
  * Reads event groups from a table called ct_event_subscribers.
  */
 @SuppressWarnings("unused")
-public class MobyEventGroupProvider implements EventGroupProvider {
+public final class MobyEventGroupProvider implements EventGroupProvider {
 
     private final Connection connection;
 
