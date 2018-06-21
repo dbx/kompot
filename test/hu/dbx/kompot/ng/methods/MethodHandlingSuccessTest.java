@@ -38,24 +38,38 @@ public class MethodHandlingSuccessTest {
     @Test
     public void testSuccessfullyHandleEvent() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
-        final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), MethodHandlingSuccessTest.consumerIdentity, executor);
-
-        consumer.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD_1, x -> {
-            LOGGER.info("Processing " + x);
-            return singletonMap("a", 1);
-        }));
-        consumer.start();
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), MethodHandlingSuccessTest.producerIdentity, executor);
+
+
+        final MethodLifecycleTester tester = new MethodLifecycleTester();
+        producer.registerMethodSendingEventListener(tester);
+
         producer.start();
+
+        final CommunicationEndpoint consumer = startConsumer(executor);
 
         Thread.sleep(1000);
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11));
 
         assertEquals(1, response.get(3, TimeUnit.SECONDS).get("a"));
 
+        tester.assertSentAndReceived();
+
         producer.stop();
         consumer.stop();
         executor.shutdown();
+    }
+
+    private CommunicationEndpoint startConsumer(ExecutorService executor) {
+        final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), MethodHandlingSuccessTest.consumerIdentity, executor);
+
+        consumer.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD_1, x -> {
+            LOGGER.info("Processing " + x);
+            return singletonMap("a", 1);
+        }));
+
+        consumer.start();
+        return consumer;
     }
 }

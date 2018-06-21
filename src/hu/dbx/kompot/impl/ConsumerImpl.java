@@ -27,6 +27,13 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ConsumerImpl implements Consumer, Runnable {
+
+    /**
+     * Maximum number of event processing threads.
+     * TODO: make it configurable!
+     */
+    private static final int MAX_EVENTS = 4;
+
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     /**
@@ -47,7 +54,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
      * Felregisztral egy future peldanyt es var a valaszra.
      * TODO: timeout parameter is legyen!
      */
-    public final void registerMessageFuture(ProducerIdentity producer, UUID messageUuid, Runnable runnable) {
+    public final void registerMessageFuture(UUID messageUuid, Runnable runnable) {
         String messageResponseChannel = consumerConfig.getNaming().getMessageResponseNotificationChannel(messageUuid);
         LOGGER.debug("Subscribing to {}", messageResponseChannel);
         pubSub.subscribe(messageResponseChannel);
@@ -85,9 +92,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     LOGGER.debug("Could not start execution, executor service rejected. maybe too much?");
                 }
             } else if (channel.contains(":r:")) {
-                // uzenet valasz.
-                LOGGER.error("Receiving method response: {} => {}", channel, message);
-                // TODO: ide hibakezelest!
+                LOGGER.debug("Receiving method response: {} => {}", channel, message);
                 futures.remove(UUID.fromString(message)).run();
             } else {
                 LOGGER.error("Unexpected message on channel {} => {}", channel, message);
@@ -172,6 +177,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
             this.data = data;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void run() {
             final Optional<BroadcastDescriptor> descriptor = consumerHandlers.getBroadcastDescriptorResolver().resolveMarker(broadcastCode);
@@ -184,15 +190,17 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 final Object dataObj = SerializeHelper.deserializeBroadcast(consumerHandlers.getBroadcastDescriptorResolver(), broadcastCode, data);
                 LOGGER.debug("Deserialized broadcast data of type {}", dataObj.getClass());
 
-                //noinspection unchecked
-                SelfDescribingBroadcastProcessor proc = (SelfDescribingBroadcastProcessor) consumerHandlers.getBroadcastProcessorFactory().create(descriptor.get()).get();
-                // .handle(descriptor.get(), dataObj);
-
-                LOGGER.debug("Handling broadcast...");
-                proc.handle(dataObj);
-                LOGGER.debug("Handled broadcast.");
+                Optional<SelfDescribingBroadcastProcessor> factory = consumerHandlers.getBroadcastProcessorFactory().create(descriptor.get());
+                if (!factory.isPresent()) {
+                    // ez elvileg nem lehetseges, mert csak azokra iratkozunk fel, amikre tudunk is figyelni.
+                    LOGGER.error("Illegalis allapot, nincsen broadcast a keresett '{}' tipusra!", broadcastCode);
+                } else {
+                    LOGGER.debug("Handling broadcast {}", broadcastCode);
+                    factory.get().handle(dataObj);
+                    LOGGER.debug("Successfully handled broadcast {}", broadcastCode);
+                }
             } catch (DeserializationException e) {
-                LOGGER.error("Could not deserialize broadcast payload!");
+                LOGGER.error("Could not deserialize broadcast payload for code {} and data {}", broadcastCode, data);
             }
         }
     }
@@ -265,8 +273,6 @@ public final class ConsumerImpl implements Consumer, Runnable {
             }
         }
     }
-
-    private static final int MAX_EVENTS = 4;
 
     /**
      * Elindit egy esemeny feldolgozast, ha egyelore nincsen tobb feldolgozo, mint MAX_EVENTS.
@@ -369,9 +375,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
         @Override
         public Trampoline jump() {
-            final String groupCode = getConsumerIdentity().getEventGroup();
-
             try (final Jedis store = consumerConfig.getPool().getResource()) {
+                final String groupCode = getConsumerIdentity().getEventGroup();
                 final String dbKey = getKeyNaming().unprocessedEventsByGroupKey(groupCode);
                 final Set<String> elems = store.zrangeByScore(dbKey, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, 1);
 

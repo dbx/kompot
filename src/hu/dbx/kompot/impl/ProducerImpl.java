@@ -110,7 +110,7 @@ public final class ProducerImpl implements Producer {
             final String methodGroup = requestFrame.getMethodMarker().getMethodGroupName();
 
             //  felregisztralunk a valasz objektumra
-            consumer.registerMessageFuture(getProducerIdentity(), requestFrame.getIdentifier(), () -> messageCallback(requestFrame, responseFuture));
+            consumer.registerMessageFuture(requestFrame.getIdentifier(), () -> messageCallback(requestFrame, responseFuture));
 
             //timeout beállítása
             scheduleMethodTimeout(requestFrame, responseFuture, marker.getTimeout());
@@ -152,6 +152,7 @@ public final class ProducerImpl implements Producer {
     }
 
     private <TReq, TRes> void messageCallback(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
+        //noinspection EmptyFinallyBlock
         try (final Jedis jedis = jedisPool.getResource()) {
             switch (methodStatus(jedis, keyNaming, requestFrame.getIdentifier())) {
                 case ERROR:
@@ -209,7 +210,6 @@ public final class ProducerImpl implements Producer {
 
         //noinspection unchecked
         final TRes res = (TRes) deserializeResponse(data, requestFrame.getMethodMarker());
-        response.complete(res);
         methodEventListeners.forEach(methodEventListener -> {
             try {
                 methodEventListener.onResponseReceived(requestFrame, res);
@@ -217,6 +217,7 @@ public final class ProducerImpl implements Producer {
                 LOGGER.error("Error handling requestSent event!", t);
             }
         });
+        response.complete(res);
     }
 
     public void addMethodEventListener(MethodSendingEventListener listener) {

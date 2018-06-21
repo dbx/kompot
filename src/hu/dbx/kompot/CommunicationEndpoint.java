@@ -106,10 +106,10 @@ public final class CommunicationEndpoint {
     /**
      * Hiv egy szinkron uzenetet es megvarja a valaszt.
      *
-     * @param method    a tavoli metodus amit hivunk
-     * @param data      a keres adattartama
-     * @param <TReq>    a keres tipusa
-     * @param <TRes>    a valasz tipusa
+     * @param method a tavoli metodus amit hivunk
+     * @param data   a keres adattartama
+     * @param <TReq> a keres tipusa
+     * @param <TRes> a valasz tipusa
      * @return a hivas eredmenyt becsomagolva
      * @throws SerializationException ha nem tudtuk a peldanyt szerializalni
      * @throws IllegalStateException  ha nem fut a komponens
@@ -122,7 +122,7 @@ public final class CommunicationEndpoint {
      * Felregisztral egy esemenykezelot
      */
     public void registerMethodSendingEventListener(MethodSendingEventListener eventListener) {
-        throw new RuntimeException("Not implemented!");
+        producer.addMethodEventListener(eventListener);
     }
 
     public void registerEventHandlers(EventProcessorFactory factory) {
