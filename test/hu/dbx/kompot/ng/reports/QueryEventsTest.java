@@ -17,6 +17,7 @@ import hu.dbx.kompot.report.Reporting;
 import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
+import redis.clients.jedis.Jedis;
 
 import java.util.Map;
 import java.util.UUID;
@@ -32,8 +33,8 @@ public class QueryEventsTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1");
+    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT2", Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT2");
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
 
@@ -48,7 +49,9 @@ public class QueryEventsTest {
         final Reporting reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
 
         //db takarítás
-        redis.getJedisPool().getResource().flushDB();
+        try (Jedis jedis = redis.getJedisPool().getResource()) {
+            jedis.flushDB();
+        }
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
@@ -58,7 +61,7 @@ public class QueryEventsTest {
 
         {
             //feldolgozás előtt álló események
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT1", EventFilters.forStatus(DataHandling.Statuses.CREATED), Pagination.fromOffsetAndLimit(0, 1000));
+            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2", EventFilters.forStatus(DataHandling.Statuses.CREATED), Pagination.fromOffsetAndLimit(0, 1000));
             assertEquals(10, uuids.getTotal());
         }
 
@@ -66,7 +69,7 @@ public class QueryEventsTest {
         consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> {
 
             {
-                final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT1",
+                final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
                         EventFilters.forStatus(DataHandling.Statuses.PROCESSING),
                         Pagination.fromOffsetAndLimit(0, 1000));
                 assertTrue(uuids.getTotal() >= 1);
@@ -86,14 +89,14 @@ public class QueryEventsTest {
         Thread.sleep(1000);
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT1",
+            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
                     EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
                     Pagination.fromOffsetAndLimit(0, 1000));
             assertEquals(5, uuids.getTotal());
         }
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT1",
+            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
                     EventFilters.forStatus(DataHandling.Statuses.ERROR),
                     Pagination.fromOffsetAndLimit(0, 1000));
             assertEquals(5, uuids.getTotal());

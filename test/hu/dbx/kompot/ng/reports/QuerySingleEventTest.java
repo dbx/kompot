@@ -13,9 +13,11 @@ import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.EventData;
 import hu.dbx.kompot.report.EventGroupData;
 import hu.dbx.kompot.report.Reporting;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
+import redis.clients.jedis.Jedis;
 
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +40,13 @@ public class QuerySingleEventTest {
 
     @Rule
     public TestRedis redis = TestRedis.build();
+
+    @Before
+    public void before() {
+        try (Jedis jedis = redis.getJedisPool().getResource()) {
+            jedis.flushDB();
+        }
+    }
 
     /**
      * Egy konkrét esemény adatainak lekérdezése. Az esemény UUID-ját az eseményküldés callbackből szedjük ki
