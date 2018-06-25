@@ -11,10 +11,12 @@ import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.producer.ProducerIdentity;
+import jdk.net.SocketFlow;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,7 +61,7 @@ public final class DataHandling {
     }
 
     public enum Statuses {
-        ERROR, PROCESSED, PROCESSING
+        CREATED, ERROR, PROCESSED, PROCESSING
     }
 
     public enum MethodResponseKeys {
@@ -87,7 +89,9 @@ public final class DataHandling {
 
         store.hsetnx(eventDetailsKey, CODE.name(), eventFrame.getEventMarker().getEventName());
         store.hsetnx(eventDetailsKey, DATA.name(), SerializeHelper.serializeDataOnly(eventFrame));
-        store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(store.time()));
+        // TODO: use server time instead
+        // store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(store.time().get().get(0)));
+        store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(LocalDateTime.now()));
         store.hsetnx(eventDetailsKey, GROUPS.name(), join(",", groups));
         store.hsetnx(eventDetailsKey, SENDER.name(), clientIdentity.getIdentifier());
 
@@ -118,6 +122,7 @@ public final class DataHandling {
     static void saveEventGroups(Transaction tx, KeyNaming keyNaming, UUID eventId, Iterable<String> eventGroups) {
         for (String group : eventGroups) {
             zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(group), eventId.toString());
+            tx.hset(keyNaming.eventDetailsKey(group, eventId), STATUS.name(), Statuses.CREATED.name());
         }
     }
 

@@ -2,6 +2,7 @@ package hu.dbx.kompot;
 
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
+import hu.dbx.kompot.consumer.async.EventSendingCallback;
 import hu.dbx.kompot.consumer.async.handler.DefaultEventProcessorAdapter;
 import hu.dbx.kompot.consumer.async.handler.EventProcessorFactory;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
@@ -138,6 +139,17 @@ public final class CommunicationEndpoint {
     public void registerMethodReceivingCallback(MethodReceivingCallback eventListener) throws IllegalArgumentException {
         consumer.addMethodReceivingCallback(eventListener);
     }
+
+    /**
+     * Registers callback that is called to follow up on the lifecycle of sending an event call.
+     *
+     * @param eventListener not null callback object
+     * @throws IllegalArgumentException on null parameter
+     */
+    public void registerEventSendingCallback(EventSendingCallback eventListener) throws IllegalArgumentException {
+        producer.addEventSendingCallback(eventListener);
+    }
+
 
     /**
      * Registers a factory object that is used to generate event processors.

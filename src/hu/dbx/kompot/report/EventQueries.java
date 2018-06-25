@@ -14,7 +14,7 @@ public interface EventQueries {
      * @return iterable of event items in an event group.
      * @throws IllegalArgumentException when required parameter is null
      */
-    ListResult<EventData> queryEvents(String group, EventFilters filters, Pagination pagination);
+    ListResult<EventGroupData> queryEvents(String group, EventFilters filters, Pagination pagination);
 
     /**
      * Looks up a single event object by event uuid.
@@ -23,7 +23,7 @@ public interface EventQueries {
      * @return event data on empty
      * @throws IllegalArgumentException when uuid is null
      */
-    Optional<EventData> querySingleEvent(UUID uuid) throws IllegalArgumentException;
+    Optional<EventGroupData> querySingleEvent(String group, UUID uuid) throws IllegalArgumentException;
 
     /**
      * Returns a sequence of event uuids for a given group with a filtering.

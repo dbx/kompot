@@ -2,9 +2,12 @@ package hu.dbx.kompot.report;
 
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.impl.DataHandling.Statuses;
+import hu.dbx.kompot.impl.LoggerUtils;
+import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -17,8 +20,15 @@ import static java.util.stream.StreamSupport.stream;
  */
 public final class Reporting implements EventQueries {
 
+    private static final Logger LOGGER = LoggerUtils.getLogger();
+
     private final JedisPool pool;
     private final KeyNaming keyNaming;
+
+    public static Reporting ofRedisConnectionUri(URI connection, KeyNaming kn) {
+        final JedisPool p = new JedisPool(connection);
+        return new Reporting(p, kn);
+    }
 
     public Reporting(JedisPool pool, KeyNaming naming) {
         this.pool = pool;
@@ -38,17 +48,16 @@ public final class Reporting implements EventQueries {
      * Returns sequence of all event group names that have had entries in db.
      */
     public Iterable<String> listAllEventGroups() {
-        //TODO: kell nekünk ilyen?
         throw new RuntimeException("Not implemented!");
     }
 
     @Override
-    public ListResult<EventData> queryEvents(String group, EventFilters filters, Pagination pagination) {
+    public ListResult<EventGroupData> queryEvents(String group, EventFilters filters, Pagination pagination) {
         final ListResult<UUID> uuids = queryEventUuids(group, filters, pagination);
 
         try (Jedis jedis = pool.getResource()) {
-            final List<EventData> data = stream(uuids.spliterator(), false)
-                    .map(uuid -> queryEvent(jedis, uuid))
+            final List<EventGroupData> data = stream(uuids.spliterator(), false)
+                    .map(uuid -> queryEventGroup(jedis, group, uuid))
                     .filter(Optional::isPresent)
                     .map(Optional::get)
                     .collect(Collectors.toList());
@@ -57,17 +66,42 @@ public final class Reporting implements EventQueries {
     }
 
     @Override
-    public Optional<EventData> querySingleEvent(UUID uuid) {
+    public Optional<EventGroupData> querySingleEvent(String group, UUID uuid) {
         if (uuid == null) {
             throw new IllegalArgumentException("Event uuid must not be null!");
         } else {
             try (Jedis jedis = pool.getResource()) {
-                return queryEvent(jedis, uuid);
+                return queryEventGroup(jedis, group, uuid);
             }
         }
     }
 
+    private Optional<EventGroupData> queryEventGroup(Jedis jedis, String eventGroupName, UUID uuid) {
+
+        Optional<EventData> eventData = queryEvent(jedis, uuid);
+
+        if (!eventData.isPresent()) {
+            LOGGER.error("Event data with uuid {} could not be loaded", uuid);
+            return Optional.empty();
+        }
+
+        final String groupEventDataKey = keyNaming.eventDetailsKey(eventGroupName, uuid);
+        final String groupEventStatusStr = jedis.hget(groupEventDataKey, STATUS.name());
+
+        if (groupEventStatusStr == null) {
+            LOGGER.error("Group event status with group {} and uuid {} could not be found", eventGroupName, uuid);
+            return Optional.empty();
+        }
+
+        final Statuses groupEventStatus = Statuses.valueOf(groupEventStatusStr);
+
+        EventGroupData eventGroupData = new EventGroupData(eventData.get(), eventGroupName, groupEventStatus);
+
+        return Optional.of(eventGroupData);
+    }
+
     private Optional<EventData> queryEvent(Jedis jedis, UUID uuid) {
+
         final String eventDataKey = keyNaming.eventDetailsKey(uuid);
         final String eventType = jedis.hget(eventDataKey, CODE.name());
 
@@ -77,11 +111,11 @@ public final class Reporting implements EventQueries {
             final String data = jedis.hget(eventDataKey, DATA.name());
             final String groups = jedis.hget(eventDataKey, GROUPS.name());
             final String sender = jedis.hget(eventDataKey, SENDER.name());
-            final LocalDateTime firstSent = LocalDateTime.parse(jedis.hget(eventDataKey, FIRST_SENT.name()));
-            final Statuses eventStatus = Statuses.valueOf(jedis.hget(eventDataKey, STATUS.name()));
+            final String firstSentStr = jedis.hget(eventDataKey, FIRST_SENT.name());
             //ERROR_MSG?
 
-            final EventData eventData = new EventData(uuid, null, eventType, eventStatus, data, groups, sender, firstSent);
+            final LocalDateTime firstSent = LocalDateTime.parse(firstSentStr);
+            final EventData eventData = new EventData(uuid, eventType, data, groups, sender, firstSent);
 
             return Optional.of(eventData);
         }

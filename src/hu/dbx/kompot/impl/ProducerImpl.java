@@ -2,6 +2,7 @@ package hu.dbx.kompot.impl;
 
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.EventFrame;
+import hu.dbx.kompot.consumer.async.EventSendingCallback;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
@@ -41,6 +42,7 @@ public final class ProducerImpl implements Producer {
     private final ProducerIdentity producerIdentity;
     private final ScheduledExecutorService methodTimeoutExecutor = Executors.newSingleThreadScheduledExecutor();
     private final List<MethodSendingCallback> methodEventListeners = new LinkedList<>();
+    private final List<EventSendingCallback> eventSendingEventListeners = new LinkedList<>();
     private final JedisPool jedisPool;
     private final ConsumerImpl consumer;
 
@@ -79,6 +81,14 @@ public final class ProducerImpl implements Producer {
             transaction.publish("e:" + marker.getEventName(), eventFrame.getIdentifier().toString());
             transaction.exec();
         }
+
+        eventSendingEventListeners.forEach(eventListener -> {
+            try {
+                eventListener.onEventSent(eventFrame);
+            } catch (Throwable t) {
+                LOGGER.error("Error handling eventSent event!", t);
+            }
+        });
     }
 
     @Override
@@ -233,6 +243,22 @@ public final class ProducerImpl implements Producer {
             throw new IllegalArgumentException("Method sending event listener must not be null!");
         } else {
             methodEventListeners.remove(listener);
+        }
+    }
+
+    public void addEventSendingCallback(EventSendingCallback listener) throws IllegalArgumentException {
+        if (listener == null) {
+            throw new IllegalArgumentException("Event sending event listener must not be null!");
+        } else {
+            eventSendingEventListeners.add(listener);
+        }
+    }
+
+    public void removeEventSendingCallback(EventSendingCallback listener) throws IllegalArgumentException {
+        if (listener == null) {
+            throw new IllegalArgumentException("Event sending event listener must not be null!");
+        } else {
+            eventSendingEventListeners.remove(listener);
         }
     }
 
