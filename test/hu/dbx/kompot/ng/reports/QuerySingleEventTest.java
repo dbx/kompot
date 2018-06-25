@@ -39,6 +39,9 @@ public class QuerySingleEventTest {
     @Rule
     public TestRedis redis = TestRedis.build();
 
+    /**
+     * Egy konkrét esemény adatainak lekérdezése. Az esemény UUID-ját az eseményküldés callbackből szedjük ki
+     */
     @Test
     public void querySingleEvent() throws SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
@@ -70,6 +73,9 @@ public class QuerySingleEventTest {
         assertEquals("EVENT1", eventData.getGroups());
     }
 
+    /**
+     * Egy konkrét esemény életciklusának végigjátszása
+     */
     @Test
     public void querySingleEventLifecycle() throws SerializationException, InterruptedException {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
@@ -86,6 +92,7 @@ public class QuerySingleEventTest {
         assertNotNull(sentEventUuid[0]);
 
         {
+            //az esemény feldolgozás előtt van
             final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid[0]);
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.CREATED, eventGroupDataOpt.get().getStatus());
@@ -94,6 +101,7 @@ public class QuerySingleEventTest {
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, executor);
         consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> {
 
+            //az esemény feldolgozás alatt van
             final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid[0]);
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.PROCESSING, eventGroupDataOpt.get().getStatus());
@@ -105,10 +113,10 @@ public class QuerySingleEventTest {
         Thread.sleep(500);
 
         {
+            //az esemény feldolgozás után van
             final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid[0]);
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.PROCESSED, eventGroupDataOpt.get().getStatus());
         }
     }
-
 }

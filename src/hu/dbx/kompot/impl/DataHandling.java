@@ -126,7 +126,7 @@ public final class DataHandling {
         }
     }
 
-    private static void zaddNow(Transaction tx, String k, String value) {
+    public static void zaddNow(Transaction tx, String k, String value) {
         long now = System.currentTimeMillis();
         double weight = ((double) now / Math.log(now)) + 3;
         tx.zadd(k, weight, value);

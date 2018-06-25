@@ -6,6 +6,7 @@ import hu.dbx.kompot.core.KeyNaming;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Transaction;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,7 +65,22 @@ final class DefaultCallback implements EventStatusCallback {
         final String eventGroupDetailsKey = keyNaming.eventDetailsKey(groupName, eventId);
 
         try (Jedis jedis = pool.getResource()) {
-            jedis.hset(eventGroupDetailsKey, DataHandling.EventKeys.STATUS.name(), status.name());
+            final Transaction multi = jedis.multi();
+            multi.hset(eventGroupDetailsKey, DataHandling.EventKeys.STATUS.name(), status.name());
+
+            if (status == DataHandling.Statuses.PROCESSING) {
+                multi.zrem(keyNaming.unprocessedEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.zaddNow(multi, keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
+            } else if (status == DataHandling.Statuses.ERROR) {
+                multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.zaddNow(multi, keyNaming.failedEventsByGroupKey(groupName), eventId.toString());
+            } else if (status == DataHandling.Statuses.PROCESSED) {
+                multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.zaddNow(multi, keyNaming.processedEventsByGroupKey(groupName), eventId.toString());
+            }
+
+
+            multi.exec();
         }
     }
 }

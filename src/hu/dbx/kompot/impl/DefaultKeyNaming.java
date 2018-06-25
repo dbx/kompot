@@ -37,6 +37,15 @@ public final class DefaultKeyNaming implements KeyNaming {
     }
 
     @Override
+    public String processingEventsByGroupKey(String eventGroupName) {
+        if (isEmpty(eventGroupName)) {
+            throw new IllegalArgumentException("Event group name must not be empty!");
+        } else {
+            return prefix + ":proc:" + eventGroupName;
+        }
+    }
+
+    @Override
     public String failedEventsByGroupKey(String eventGroupName) {
         if (isEmpty(eventGroupName)) {
             throw new IllegalArgumentException("Event group name must not be empty!");

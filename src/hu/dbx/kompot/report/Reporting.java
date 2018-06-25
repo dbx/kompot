@@ -134,27 +134,34 @@ public final class Reporting implements EventQueries {
         try (Jedis jedis = pool.getResource()) {
             final Set<String> eventUuids = new HashSet<>();
 
+            final int offset = pagination.getOffset();
+            final int limit = pagination.getLimit();
+
             if (eventStatus == null) {
-                eventUuids.addAll(jedis.smembers(keyNaming.unprocessedEventsByGroupKey(group)));
-                eventUuids.addAll(jedis.smembers(keyNaming.failedEventsByGroupKey(group)));
-                eventUuids.addAll(jedis.smembers(keyNaming.processedEventsByGroupKey(group)));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.unprocessedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.processingEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.processedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.failedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
             } else {
                 switch (eventStatus) {
-                    case ERROR:
-                        eventUuids.addAll(jedis.smembers(keyNaming.unprocessedEventsByGroupKey(group)));
-                        break;
-                    case PROCESSED:
-                        eventUuids.addAll(jedis.smembers(keyNaming.processedEventsByGroupKey(group)));
+                    case CREATED:
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.unprocessedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
                         break;
                     case PROCESSING:
-                        eventUuids.addAll(jedis.smembers(keyNaming.failedEventsByGroupKey(group)));
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.processingEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                        break;
+                    case PROCESSED:
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.processedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                        break;
+                    case ERROR:
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.failedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
                         break;
                 }
             }
 
             //TODO:pagination
             final List<UUID> uuids = eventUuids.stream().map(UUID::fromString).collect(Collectors.toList());
-            return new ListResult<>(pagination.getOffset(), pagination.getLimit(), uuids.size(), uuids);
+            return new ListResult<>(offset, limit, uuids.size(), uuids);
         }
     }
 }

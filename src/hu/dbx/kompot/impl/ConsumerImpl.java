@@ -356,9 +356,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
                         LOGGER.trace("Some other instance of {} has already gathered evt {}", groupCode, eventUuid);
                         return new AfterEventRunnable();
                     } else {
-                        long removed = store.zrem(getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
-                        LOGGER.trace("Elkezdtem dolgozni az esmenyen! {} {}", eventUuid, removed);
-
+                        // itt a versenyhelyzet elkerulese miatt remove van. ha ezt kiszedjuk, megnonek a logok.
+                        store.zrem(getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
                         frame = DataHandling.readEventFrame(store, getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
                     }
                 } catch (DeserializationException e) {
@@ -367,6 +366,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 }
 
                 callback.markProcessing();
+                LOGGER.trace("Elkezdtem dolgozni az esmenyen! {}", eventUuid);
                 getEventProcessorAdapter().handle(frame.getEventMarker(), frame.getEventData(), callback);
 
                 consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable()));

@@ -2,7 +2,7 @@ package hu.dbx.kompot.report;
 
 import java.util.Iterator;
 
-final class ListResult<T> implements Iterable<T> {
+final public class ListResult<T> implements Iterable<T> {
 
     private final int from;
     private final int limit;

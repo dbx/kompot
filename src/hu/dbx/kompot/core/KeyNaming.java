@@ -17,6 +17,14 @@ public interface KeyNaming {
     String unprocessedEventsByGroupKey(String eventGroupName);
 
     /**
+     * Egy rendezett halmaz kulcsa, ami alatt ott van az épp feldolgozás alatt álló esemenyek uuid listaja.
+     *
+     * @return redis key for set of processing events
+     * @throws NullPointerException when eventGroupName is null or empty
+     */
+    String processingEventsByGroupKey(String eventGroupName);
+
+    /**
      * Egy rendezett halmaz kulcsa, ami alatt ott van a hibara futott esemenyek uuid listaja.
      *
      * @return redis key for set of failed event items
