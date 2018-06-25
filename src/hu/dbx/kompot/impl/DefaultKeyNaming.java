@@ -99,6 +99,11 @@ public final class DefaultKeyNaming implements KeyNaming {
         }
     }
 
+    @Override
+    public String eventGroupsKey() {
+        return prefix + ":grs";
+    }
+
     private boolean isEmpty(String s) {
         return null == s || s.isEmpty();
     }

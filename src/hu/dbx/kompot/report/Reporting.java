@@ -44,11 +44,11 @@ public final class Reporting implements EventQueries {
         // TODO: rremove from failure queue
     }
 
-    /**
-     * Returns sequence of all event group names that have had entries in db.
-     */
-    public Iterable<String> listAllEventGroups() {
-        throw new RuntimeException("Not implemented!");
+    @Override
+    public Collection<String> listAllEventGroups() {
+        try (Jedis jedis = pool.getResource()) {
+            return jedis.smembers(keyNaming.eventGroupsKey());
+        }
     }
 
     @Override

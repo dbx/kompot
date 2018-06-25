@@ -1,9 +1,15 @@
 package hu.dbx.kompot.report;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface EventQueries {
+
+    /**
+     * Returns sequence of all event group names that have had entries in db.
+     */
+    Collection<String> listAllEventGroups();
 
     /**
      * Returns sequence of events for a given restriction.

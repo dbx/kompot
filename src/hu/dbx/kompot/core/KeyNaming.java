@@ -72,4 +72,11 @@ public interface KeyNaming {
      * @throws NullPointerException when method uuid is null
      */
     String methodDetailsKey(UUID methodUuid);
+
+    /**
+     * A set for existing event groups
+     *
+     * @throws NullPointerException when method uuid is null
+     */
+    String eventGroupsKey();
 }

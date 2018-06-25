@@ -11,7 +11,6 @@ import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.producer.ProducerIdentity;
-import jdk.net.SocketFlow;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
@@ -113,6 +112,7 @@ public final class DataHandling {
 
     /**
      * Egy esemenyt rateszt a feldolgozando sorra es a history-ba is elmenti.
+     * Lementi az event group-ot is egy setbe.
      *
      * @param tx          jedis MULTI transaction instance
      * @param keyNaming   megmondja, h milyen kulcs ala tesszuk az esemenyt
@@ -123,6 +123,8 @@ public final class DataHandling {
         for (String group : eventGroups) {
             zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(group), eventId.toString());
             tx.hset(keyNaming.eventDetailsKey(group, eventId), STATUS.name(), Statuses.CREATED.name());
+
+            tx.sadd(keyNaming.eventGroupsKey(), group);
         }
     }
 
