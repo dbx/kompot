@@ -18,7 +18,7 @@ import static java.util.stream.StreamSupport.stream;
 /**
  * API for status reports
  */
-public final class Reporting implements EventQueries {
+public final class Reporting implements EventQueries, EventUpdates {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
@@ -33,15 +33,6 @@ public final class Reporting implements EventQueries {
     public Reporting(JedisPool pool, KeyNaming naming) {
         this.pool = pool;
         this.keyNaming = naming;
-    }
-
-    public void resend(String eventUuid, String eventGroup) {
-        // 1. TODO: make sure evt eventGroup is in failed state
-        // 2. set event state to sending...
-        // 3. put it back to queue
-
-        // store.insertTimeItem(naming.eventCreationHistoryKey(), eventUuid + "," + eventGroup);
-        // TODO: rremove from failure queue
     }
 
     @Override
@@ -163,5 +154,18 @@ public final class Reporting implements EventQueries {
             final List<UUID> uuids = eventUuids.stream().map(UUID::fromString).collect(Collectors.toList());
             return new ListResult<>(offset, limit, uuids.size(), uuids);
         }
+    }
+
+    @Override
+    public void resendEvent(String eventUuid, String eventGroup) {
+        // 1. TODO: make sure evt eventGroup is in failed or processing state
+        // TODO: remove from failure queue
+        // 2. set event state to sending...
+        // 3. put it back to queue
+    }
+
+    @Override
+    public void removeEvent(String eventUuid, String eventGroup) {
+
     }
 }
