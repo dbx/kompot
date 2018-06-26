@@ -1,5 +1,7 @@
 package hu.dbx.kompot.report;
 
+import java.util.UUID;
+
 public interface EventUpdates {
 
     /**
@@ -9,7 +11,7 @@ public interface EventUpdates {
      * @param eventGroup gruop name where events belong (not null!)
      * @throws IllegalArgumentException if the event does not exists or it is not in a resendable state
      */
-    void resendEvent(String eventUuid, String eventGroup);
+    void resendEvent(UUID eventUuid, String eventGroup);
 
     /**
      * Removes the event
@@ -18,7 +20,7 @@ public interface EventUpdates {
      * @param eventGroup gruop name where events belong (not null!)
      * @throws IllegalArgumentException if the event does not exists
      */
-    void removeEvent(String eventUuid, String eventGroup);
+    void removeEvent(UUID eventUuid, String eventGroup);
 
     //TODO: sendEvent???
     //TODO: updateEventData???

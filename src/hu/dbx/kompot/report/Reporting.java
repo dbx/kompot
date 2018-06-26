@@ -1,11 +1,13 @@
 package hu.dbx.kompot.report;
 
 import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DataHandling.Statuses;
 import hu.dbx.kompot.impl.LoggerUtils;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Transaction;
 
 import java.net.URI;
 import java.time.LocalDateTime;
@@ -150,22 +152,89 @@ public final class Reporting implements EventQueries, EventUpdates {
                 }
             }
 
-            //TODO:pagination
             final List<UUID> uuids = eventUuids.stream().map(UUID::fromString).collect(Collectors.toList());
             return new ListResult<>(offset, limit, uuids.size(), uuids);
         }
     }
 
+
+    private static List<Statuses> resendableStatuses = Arrays.asList(Statuses.ERROR, Statuses.PROCESSING);
+
     @Override
-    public void resendEvent(String eventUuid, String eventGroup) {
-        // 1. TODO: make sure evt eventGroup is in failed or processing state
-        // TODO: remove from failure queue
-        // 2. set event state to sending...
-        // 3. put it back to queue
+    public void resendEvent(UUID eventUuid, String eventGroup) {
+
+        if (eventUuid == null)
+            throw new IllegalArgumentException("eventUuid should not be null");
+        if (eventGroup == null)
+            throw new IllegalArgumentException("eventGroup should not be null");
+
+        try (Jedis jedis = pool.getResource()) {
+
+            final String groupEventDataKey = keyNaming.eventDetailsKey(eventGroup, eventUuid);
+            final String groupEventStatusStr = jedis.hget(groupEventDataKey, STATUS.name());
+
+            if (groupEventStatusStr == null) {
+                throw new IllegalArgumentException("Event group with uuid " + eventUuid + " and group name " + eventGroup + " does not exist");
+            }
+
+            final Statuses status = Statuses.valueOf(groupEventStatusStr);
+
+            if (!resendableStatuses.contains(status)) {
+                throw new IllegalArgumentException("Event status [" + status + "] is not resendable [" + resendableStatuses + "]");
+            }
+
+            final String removeKey;
+
+            if (Statuses.ERROR.equals(status)) {
+                removeKey = keyNaming.failedEventsByGroupKey(eventGroup);
+            } else if (Statuses.PROCESSING.equals(status)) {
+                removeKey = keyNaming.processingEventsByGroupKey(eventGroup);
+            } else throw new RuntimeException("Ilyen eset nem lehet!");
+
+            //tranzakciót nyitok, törlöm a régi sorból, hozzáadom a CREATED sorhoz, update-elem a státuszát
+            final Transaction tx = jedis.multi();
+            tx.zrem(removeKey, eventUuid.toString());
+            DataHandling.zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(eventGroup), eventUuid.toString());
+            tx.hset(groupEventDataKey, STATUS.name(), Statuses.CREATED.name());
+            tx.exec();
+        }
     }
 
     @Override
-    public void removeEvent(String eventUuid, String eventGroup) {
+    public void removeEvent(UUID eventUuid, String eventGroup) {
 
+        if (eventUuid == null)
+            throw new IllegalArgumentException("eventUuid should not be null");
+        if (eventGroup == null)
+            throw new IllegalArgumentException("eventGroup should not be null");
+
+        try (Jedis jedis = pool.getResource()) {
+
+            final String groupEventDataKey = keyNaming.eventDetailsKey(eventGroup, eventUuid);
+            final String groupEventStatusStr = jedis.hget(groupEventDataKey, STATUS.name());
+
+            if (groupEventStatusStr == null) {
+                throw new IllegalArgumentException("Event group with uuid " + eventUuid + " and group name " + eventGroup + " does not exist");
+            }
+
+            final Statuses status = Statuses.valueOf(groupEventStatusStr);
+
+            final String removeKey;
+
+            if (Statuses.ERROR.equals(status)) {
+                removeKey = keyNaming.failedEventsByGroupKey(eventGroup);
+            } else if (Statuses.PROCESSING.equals(status)) {
+                removeKey = keyNaming.processingEventsByGroupKey(eventGroup);
+            } else if (Statuses.PROCESSED.equals(status)) {
+                removeKey = keyNaming.processedEventsByGroupKey(eventGroup);
+            } else if (Statuses.CREATED.equals(status)) {
+                removeKey = keyNaming.unprocessedEventsByGroupKey(eventGroup);
+            } else throw new RuntimeException("Ilyen eset nem lehet!");
+
+            jedis.zrem(removeKey, eventUuid.toString());
+            jedis.del(groupEventDataKey);
+
+            //TODO: az adatelem törlése, ha nem kapcsolódik rá több group
+        }
     }
 }

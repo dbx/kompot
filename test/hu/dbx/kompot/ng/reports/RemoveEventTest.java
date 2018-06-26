@@ -1,41 +1,37 @@
 package hu.dbx.kompot.ng.reports;
 
-
 import hu.dbx.kompot.CommunicationEndpoint;
 import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
 import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.Reporting;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
-public class QueryEventGroups {
+public class RemoveEventTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final EventDescriptor<Map> EVENT_2 = EventDescriptor.of("EVENT2", Map.class);
-    private static final ConsumerIdentity producerIdentity = groupGroup("PROD");
-
+    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT3", Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT3");
+    private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
     @Rule
     public TestRedis redis = TestRedis.build();
@@ -48,27 +44,25 @@ public class QueryEventGroups {
     }
 
     @Test
-    public void queryEventGroups() throws SerializationException {
-        final ExecutorService executor = Executors.newFixedThreadPool(4);
+    public void removeEvent() throws SerializationException {
+
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+        UUID[] sentEventUuid = new UUID[]{null};
+
         //TODO: ezt a DefaultKeyNaming.ofPrefix-et nem itt kellene hívni, hanem legalábbis a CommunicationEndpoint-tól lekérni
-        final Reporting reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
+        Reporting reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
+        producer.registerEventSendingCallback(frame -> sentEventUuid[0] = frame.getIdentifier());
         producer.start();
         producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
 
-        assertEquals(1, reporting.listAllEventGroups().size());
+        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
 
-        producer.asyncSendEvent(EVENT_2, singletonMap("bb", 1));
+        reporting.removeEvent(sentEventUuid[0], "EVENT3");
 
-        assertEquals(2, reporting.listAllEventGroups().size());
+        Assert.assertFalse(reporting.querySingleEvent("EVENT3", sentEventUuid[0]).isPresent());
 
-
-        //TODO: itt miért event neveket látok csoportok helyett?
-
-        final Set<String> groups = new HashSet<>(reporting.listAllEventGroups());
-
-        assertTrue(groups.containsAll(Arrays.asList("EVENT1", "EVENT2")));
     }
 
 }
