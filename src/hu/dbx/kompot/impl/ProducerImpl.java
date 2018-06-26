@@ -78,8 +78,12 @@ public final class ProducerImpl implements Producer {
             saveEventGroups(transaction, keyNaming, eventFrame.getIdentifier(), eventGroups);
 
             // publish on pubsub
-            transaction.publish("e:" + marker.getEventName(), eventFrame.getIdentifier().toString());
+            LOGGER.trace("Publishing pubsub!");
+            eventGroups.forEach(group -> transaction.publish("e:" + group, eventFrame.getIdentifier().toString()));
+
             transaction.exec();
+            LOGGER.debug("Called exec!");
+
         }
 
         eventSendingEventListeners.forEach(eventListener -> {
