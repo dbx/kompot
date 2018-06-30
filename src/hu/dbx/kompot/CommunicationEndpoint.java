@@ -28,7 +28,11 @@ import java.net.URI;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Use this component as a simplified interface to access library functionality.
+ */
 @SuppressWarnings("WeakerAccess")
 public final class CommunicationEndpoint {
 
@@ -41,12 +45,23 @@ public final class CommunicationEndpoint {
     private final ProducerImpl producer;
     private final ConsumerImpl consumer;
 
+    private final AtomicBoolean starting = new AtomicBoolean(false);
+    private final AtomicBoolean started = new AtomicBoolean(false);
+
+
+    // TODO: make prefix configurable!
     private static final DefaultKeyNaming naming = DefaultKeyNaming.ofPrefix("moby");
 
+    /**
+     * Constructs a new instance with a default executor service.
+     */
     public static CommunicationEndpoint ofRedisConnectionUri(URI connection, EventGroupProvider groups, ConsumerIdentity serverIdentity) {
         return ofRedisConnectionUri(connection, groups, serverIdentity, Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS));
     }
 
+    /**
+     * Constructs a new instance with a custom executor serviec.
+     */
     public static CommunicationEndpoint ofRedisConnectionUri(URI connection, EventGroupProvider groups, ConsumerIdentity serverIdentity, ExecutorService executor) {
         return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, ProducerIdentity.randomUuidIdentity(), executor);
     }
@@ -60,32 +75,44 @@ public final class CommunicationEndpoint {
     }
 
     /**
-     * Elinditja a komponenst.
+     * Starts component or throws.
      *
-     * @throws IllegalStateException ha mar elindult korabban
+     * @throws IllegalStateException When already started.
      */
     public void start() throws IllegalStateException {
-        try {
-            consumer.startDaemonThread();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+        if (starting.compareAndSet(false, true)) {
+            try {
+                consumer.startDaemonThread();
+                started.set(true);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            throw new IllegalStateException("Method start() has already been called.");
         }
     }
 
     /**
-     * Leallitja a komponenst.
+     * Stops component or throws.
      *
-     * @throws IllegalStateException ha meg nem indult el a komponens
+     * @throws IllegalStateException if component is not running already.
      */
     public void stop() throws IllegalStateException {
-
-        consumer.shutdown();
-        producer.shutdown();
-        // throw new IllegalStateException("Nincs implementalva!");
+        if (started.compareAndSet(true, false)) {
+            consumer.shutdown();
+            producer.shutdown();
+            // throw new IllegalStateException("Nincs implementalva!");
+            starting.set(false);
+        } else {
+            throw new IllegalStateException("Method start() has not yet been called.");
+        }
     }
 
+    /**
+     * Returns true iff component is up and running.
+     */
     public boolean isRunning() {
-        throw new IllegalStateException("Nincs implementalva!");
+        return started.get();
     }
 
     /**
@@ -106,15 +133,16 @@ public final class CommunicationEndpoint {
     }
 
     /**
-     * Hiv egy szinkron uzenetet es megvarja a valaszt.
+     * Calls a synchronous methods and returns a future representing the result.
      *
-     * @param method a tavoli metodus amit hivunk
-     * @param data   a keres adattartama
-     * @param <TReq> a keres tipusa
-     * @param <TRes> a valasz tipusa
-     * @return a hivas eredmenyt becsomagolva
-     * @throws SerializationException ha nem tudtuk a peldanyt szerializalni
-     * @throws IllegalStateException  ha nem fut a komponens
+     * @param method Remote method descriptor, must not be null.
+     * @param data   request data payload. Must be able to serialize.
+     * @param <TReq> type of request
+     * @param <TRes> type of response
+     * @return future representing call result data.
+     * @throws SerializationException when could not serialize data payload.
+     * @throws IllegalStateException  if current component is not running.
+     * @throws NullPointerException   when method argument is null.
      */
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data) throws SerializationException, IllegalStateException {
         return producer.sendMessage(method, data);
@@ -172,7 +200,11 @@ public final class CommunicationEndpoint {
      * Felregisztral egy esemenykezelot arra az esetre, ha broadcast uzenetet kapunk
      */
     public void registerBroadcastProcessor(SelfDescribingBroadcastProcessor broadcastProcessor) {
-        broadcasts.register(broadcastProcessor);
+        if (starting.get()) {
+            throw new IllegalStateException("Process has already been started!");
+        } else {
+            broadcasts.register(broadcastProcessor);
+        }
     }
 
     /**
