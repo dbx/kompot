@@ -84,7 +84,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 consumerConfig.getExecutor().execute(new BroadcastRunnable(broadcastCode, message));
             } else if (channel.startsWith("e:")) {
                 startEventProcessing(UUID.fromString(message));
-c            } else if (channel.startsWith("m:")) {                 // uzenet keres
+            } else if (channel.startsWith("m:")) {                 // uzenet keres
                 LOGGER.debug("Received message bang {} on channel {}, trying to start method.", message, channel);
                 //noinspection unused
                 final String methodName = channel.substring(2);
