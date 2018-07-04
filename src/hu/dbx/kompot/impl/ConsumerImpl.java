@@ -84,14 +84,14 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 consumerConfig.getExecutor().execute(new BroadcastRunnable(broadcastCode, message));
             } else if (channel.startsWith("e:")) {
                 startEventProcessing(UUID.fromString(message));
-            } else if (channel.startsWith("m:")) {                 // uzenet keres
-                LOGGER.debug("Received message bang {} on {}, trying to start method.", channel, message);
+c            } else if (channel.startsWith("m:")) {                 // uzenet keres
+                LOGGER.debug("Received message bang {} on channel {}, trying to start method.", message, channel);
                 //noinspection unused
                 final String methodName = channel.substring(2);
                 try {
                     consumerConfig.getExecutor().execute(new MethodRunnable(UUID.fromString(message)));
                 } catch (RejectedExecutionException rejected) {
-                    LOGGER.debug("Could not start execution, executor service rejected. maybe too much?");
+                    LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
                 }
             } else if (channel.contains(":r:")) {
                 LOGGER.debug("Receiving method response: {} => {}", channel, message);
@@ -222,11 +222,11 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
                 // a metodus cucca ide megy.
                 final String methodKey = getKeyNaming().methodDetailsKey(methodUuid);
-                LOGGER.trace("Trying to steal from {}", methodKey);
+                LOGGER.debug("Trying to steal from {}", methodKey);
                 Long result = store.hsetnx(methodKey, "owner", getConsumerIdentity().getIdentifier());
 
                 if (result == 0) {
-                    LOGGER.trace("Could not steal {}", methodKey);
+                    LOGGER.debug("Could not steal {}", methodKey);
                     // some other instance has already took this item, we do nothing
                     return;
                 }
@@ -234,7 +234,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 final Optional<MethodRequestFrame> frame = DataHandling.readMethodFrame(store, getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
 
                 if (!frame.isPresent()) {
-                    LOGGER.trace("Could not read from method {}", methodKey);
+                    LOGGER.debug("Could not read from method {}", methodKey);
                     // lejart a metodus?
                     return;
                 } else {
