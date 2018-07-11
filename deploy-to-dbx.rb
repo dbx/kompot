@@ -20,10 +20,10 @@ puts "Verzio: #{VERSION}"
 REMOTE_DIRECTORY="/home/ubuntu/maven/repository/#{GROUP}/#{ARTIFACT}/#{VERSION}"
 puts (`ssh #{MVN_HOST} mkdir -p #{REMOTE_DIRECTORY}` or abort("Could not create dir"))
 
-REMOTE_JAR_FILE="#{REMOTE_DIRECTORY}/stencil-#{VERSION}.jar"
+REMOTE_JAR_FILE="#{REMOTE_DIRECTORY}/#{ARTIFACT}-#{VERSION}.jar"
 puts (`scp #{JARFILE} #{MVN_HOST}:#{REMOTE_JAR_FILE}` or abort("Could not copy JAR!"))
 
-REMOTE_POM_FILE="#{REMOTE_DIRECTORY}/stencil-#{VERSION}.pom"
+REMOTE_POM_FILE="#{REMOTE_DIRECTORY}/#{ARTIFACT}-#{VERSION}.pom"
 puts (`scp #{POMFILE} #{MVN_HOST}:#{REMOTE_POM_FILE}` or abort("Could not copy POM!"))
 
 puts "Good!"
