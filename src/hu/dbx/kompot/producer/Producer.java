@@ -4,6 +4,7 @@ import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.moby.MetaDataHolder;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -16,14 +17,18 @@ public interface Producer {
      * Sends an asynchronous event.
      * Events are sent to EVERY event groups for this kind of event.
      *
-     * @param entityCreated a kikuldendo esemeny leiroja
-     * @param request       a kikuldendo esemeny adattartama
-     * @param <TReq>        az esemeny adattartam tipusa
+     * @param <TReq>   az esemeny adattartam tipusa
+     * @param marker   a kikuldendo esemeny leiroja
+     * @param request  a kikuldendo esemeny adattartama
+     * @param metaData a kiküldendő esemény metaadatai
      * @throws NullPointerException   when any argument is null
      * @throws SerializationException when payload can not be serialized for some reason
      */
-    <TReq> void sendEvent(EventDescriptor<TReq> entityCreated, TReq request) throws SerializationException;
+    <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request, MetaDataHolder metaData) throws SerializationException;
 
+    default <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request) throws SerializationException {
+        sendEvent(marker, request, null);
+    }
 
     /**
      * @return service to get event group names
@@ -43,8 +48,11 @@ public interface Producer {
      * @throws SerializationException   when could not serialize method data
      * @throws IllegalArgumentException when any argument is null
      */
-    <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData) throws SerializationException;
+    <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData, MetaDataHolder metaData) throws SerializationException;
 
+    default <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData) throws SerializationException {
+        return sendMessage(marker, methodData, null);
+    }
 
     /**
      * Kikuld egy broadcast uzenetet annak aki figyel

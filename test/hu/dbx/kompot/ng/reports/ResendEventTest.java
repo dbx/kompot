@@ -66,7 +66,7 @@ public class ResendEventTest {
         Reporting reporting = testInit.getReporting();
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, testInit.getExecutor());
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> callback.success(":)")));
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> callback.success(":)")));
 
         consumer.start();
         Thread.sleep(500);
@@ -85,7 +85,7 @@ public class ResendEventTest {
         Reporting reporting = testInit.getReporting();
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, testInit.getExecutor());
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> LOGGER.info("Nem csinálok semmit!")));
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> LOGGER.info("Nem csinálok semmit!")));
 
         consumer.start();
         Thread.sleep(500);
@@ -106,7 +106,7 @@ public class ResendEventTest {
         Reporting reporting = testInit.getReporting();
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, testInit.getExecutor());
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> callback.error(":'(")));
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> callback.error(":'(")));
 
         consumer.start();
         Thread.sleep(500);

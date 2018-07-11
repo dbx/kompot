@@ -2,6 +2,7 @@ package hu.dbx.kompot.consumer.sync.handler;
 
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptorResolver;
+import hu.dbx.kompot.moby.MetaDataHolder;
 
 import java.util.HashSet;
 import java.util.Optional;
@@ -12,13 +13,13 @@ public final class DefaultMethodProcessorAdapter implements MethodDescriptorReso
 
     private Set<SelfDescribingMethodProcessor> processors = new HashSet<>();
 
-    public <TReq, TRes> TRes call(MethodDescriptor<TReq, TRes> marker, TReq request) {
+    public <TReq, TRes> TRes call(MethodDescriptor<TReq, TRes> marker, TReq request, MetaDataHolder meta) {
         final Optional<SelfDescribingMethodProcessor> p = processors.stream().filter(x -> x.getMethodMarker().equals(marker)).findAny();
         if (!p.isPresent())
             throw new IllegalArgumentException("Can not find processor for method!");
 
         //noinspection unchecked
-        return (TRes) p.get().handle(request);
+        return (TRes) p.get().handle(request, meta);
     }
 
     public void register(SelfDescribingMethodProcessor processor) {

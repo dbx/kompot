@@ -20,6 +20,7 @@ import hu.dbx.kompot.impl.DefaultKeyNaming;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
+import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import redis.clients.jedis.JedisPool;
@@ -128,8 +129,8 @@ public final class CommunicationEndpoint {
         producer.sendEvent(event, data);
     }
 
-    public <TReq> void asyncSendEventOnSuccessfulTransaction(EventDescriptor<TReq> event, TReq data) {
-        // felregisztral a tranzakciora, csak siker eseten kuld esemenyt!
+    public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data, MetaDataHolder metaData) throws SerializationException, IllegalStateException {
+        producer.sendEvent(event, data, metaData);
     }
 
     /**
@@ -147,6 +148,11 @@ public final class CommunicationEndpoint {
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data) throws SerializationException, IllegalStateException {
         return producer.sendMessage(method, data);
     }
+
+    public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data, MetaDataHolder metaDataHolder) throws SerializationException, IllegalStateException {
+        return producer.sendMessage(method, data, metaDataHolder);
+    }
+
 
     /**
      * Registers callback that is called to follow up on the lifecycle of sending a method call.

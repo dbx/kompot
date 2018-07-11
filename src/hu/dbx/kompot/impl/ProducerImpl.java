@@ -12,6 +12,7 @@ import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.Producer;
 import hu.dbx.kompot.producer.ProducerIdentity;
@@ -20,9 +21,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
 
-import java.util.LinkedList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -59,14 +58,14 @@ public final class ProducerImpl implements Producer {
     }
 
     @Override
-    public <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request) throws SerializationException {
+    public <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request, MetaDataHolder metaData) throws SerializationException {
         if (null == marker) {
             throw new NullPointerException("Event marker is null!");
         } else if (null == request) {
             throw new NullPointerException("Request object is null for marker: " + marker);
         }
 
-        final EventFrame<TReq> eventFrame = EventFrame.build(marker, request);
+        final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData);
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
 
         try (Jedis jedis = jedisPool.getResource()) {
@@ -101,7 +100,7 @@ public final class ProducerImpl implements Producer {
     }
 
     @Override
-    public <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData) throws SerializationException {
+    public <TReq, TRes> CompletableFuture<TRes> sendMessage(MethodDescriptor<TReq, TRes> marker, TReq methodData, MetaDataHolder metaData) throws SerializationException {
         if (marker == null) {
             throw new IllegalArgumentException("Can not send async message for null marker!");
         } else if (methodData == null) {
@@ -109,7 +108,7 @@ public final class ProducerImpl implements Producer {
         }
 
         // make request object
-        final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(getProducerIdentity(), marker, methodData);
+        final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(getProducerIdentity(), marker, methodData, metaData);
 
         LOGGER.trace("Built method to send: {}", requestFrame);
 
@@ -117,8 +116,10 @@ public final class ProducerImpl implements Producer {
 
         try (Jedis jedis = jedisPool.getResource()) {
 
+            Transaction transaction = jedis.multi();
+
             // bementjuk a memoriaba
-            writeMethodFrame(jedis, keyNaming, requestFrame);
+            writeMethodFrame(transaction, keyNaming, requestFrame);
 
             // publikaljuk a metodust!
             final String methodGroup = requestFrame.getMethodMarker().getMethodGroupName();
@@ -131,8 +132,10 @@ public final class ProducerImpl implements Producer {
 
             // megszolitjuk a cel modult
             String channel = "m:" + methodGroup;
-            jedis.publish(channel, requestFrame.getIdentifier().toString());
+            transaction.publish(channel, requestFrame.getIdentifier().toString());
             LOGGER.trace("Published on channel {}", channel);
+
+            transaction.exec();
         }
 
         methodEventListeners.forEach(methodEventListener -> {

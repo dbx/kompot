@@ -64,7 +64,7 @@ public class EventHandlingDelayedSuccessTest {
 
     private CommunicationEndpoint startConsumer(AtomicInteger counter, ExecutorService executor) {
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), consumerIdentity, executor);
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> {
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> {
             LOGGER.info("Processed");
             callback.success("OK");
             counter.incrementAndGet();

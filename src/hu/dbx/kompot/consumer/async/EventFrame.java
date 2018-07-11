@@ -1,5 +1,7 @@
 package hu.dbx.kompot.consumer.async;
 
+import hu.dbx.kompot.moby.MetaDataHolder;
+
 import java.util.UUID;
 
 /**
@@ -21,6 +23,11 @@ public class EventFrame<Req> {
     private Req eventData;
 
     /**
+     * Meta data
+     */
+    private MetaDataHolder metaData;
+
+    /**
      * Identifier of sender module.
      */
     private String sourceIdentifier;
@@ -30,11 +37,12 @@ public class EventFrame<Req> {
      */
     private UUID identifier = UUID.randomUUID();
 
-    public static <Req> EventFrame<Req> build(EventDescriptor<Req> marker, Req request) {
+    public static <Req> EventFrame<Req> build(EventDescriptor<Req> marker, Req request, MetaDataHolder metaData) {
         final EventFrame<Req> eventFrame = new EventFrame<>();
         eventFrame.setEventMarker(marker);
         eventFrame.setEventData(request);
         eventFrame.setIdentifier(UUID.randomUUID());
+        eventFrame.setMetaData(metaData);
         return eventFrame;
     }
 
@@ -68,6 +76,14 @@ public class EventFrame<Req> {
 
     public void setIdentifier(UUID identifier) {
         this.identifier = identifier;
+    }
+
+    public MetaDataHolder getMetaData() {
+        return metaData;
+    }
+
+    public void setMetaData(MetaDataHolder metaData) {
+        this.metaData = metaData;
     }
 
     @Override

@@ -10,9 +10,12 @@ import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisCommands;
+import redis.clients.jedis.PipelineBase;
 import redis.clients.jedis.Transaction;
 
 import java.time.LocalDateTime;
@@ -94,21 +97,10 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, GROUPS.name(), join(",", groups));
         store.hsetnx(eventDetailsKey, SENDER.name(), clientIdentity.getIdentifier());
 
+        saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
+
         LOGGER.debug("Saved event details key.");
     }
-
-    /*
-    public static Map<String, Object> loadDetails(SafeKVStoreFacade<String, String> store, KeyNaming naming, String uuid) {
-        final Map<String, Object> m = new HashMap<>();
-        m.put("uuid", uuid);
-        m.put(CODE.name(), store.readMap(naming.eventDetailsKey(uuid), CODE.name()));
-        m.put(FIRST_SENT.name(), store.readMap(naming.eventDetailsKey(uuid), FIRST_SENT.name()));
-        m.put(DATA.name(), store.readMap(naming.eventDetailsKey(uuid), DATA.name()));
-        m.put(GROUPS.name(), Arrays.asList(store.readMap(naming.eventDetailsKey(uuid), GROUPS.name()).split(","))); // all modules it was sent to.
-        m.put(SENDER.name(), store.readMap(naming.eventDetailsKey(uuid), SENDER.name()));
-        return m;
-    }
-    */
 
     /**
      * Egy esemenyt rateszt a feldolgozando sorra es a history-ba is elmenti.
@@ -152,10 +144,11 @@ public final class DataHandling {
         response.setEventData(eventDataObj);
         response.setIdentifier(eventUuid);
         response.setSourceIdentifier(null); // did not set now.
+        response.setMetaData(readMetaData(jedis, eventDetailsKey));
         return response;
     }
 
-    static void writeMethodFrame(Jedis jedis, KeyNaming keyNaming, MethodRequestFrame frame) throws SerializationException {
+    static void writeMethodFrame(Transaction jedis, KeyNaming keyNaming, MethodRequestFrame frame) throws SerializationException {
         final String methodDetailsKey = keyNaming.methodDetailsKey(frame.getIdentifier());
         // minel elobb dobjunk kivetelt!
         final String serialized = SerializeHelper.serializeObject(frame.getMethodData());
@@ -166,6 +159,9 @@ public final class DataHandling {
         jedis.hset(methodDetailsKey, CODE.name(), frame.getMethodMarker().getMethodName());
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
         jedis.hset(methodDetailsKey, DATA.name(), serialized);
+
+        saveMetaData(jedis,frame.getMetaData(), methodDetailsKey);
+
         final int expiration = ((int) Math.ceil(((double) frame.getMethodMarker().getTimeout()) / 1000));
         LOGGER.debug("Setting expiration to {} seconds on key {}", expiration, methodDetailsKey);
 
@@ -176,8 +172,9 @@ public final class DataHandling {
     static Optional<MethodRequestFrame> readMethodFrame(Jedis jedis, KeyNaming keyNaming, MethodDescriptorResolver resolver, UUID methodUuid) throws DeserializationException {
         final String methodDetailsKey = keyNaming.methodDetailsKey(methodUuid);
         final String methodName = jedis.hget(methodDetailsKey, CODE.name());
-        if (methodName == null)
+        if (methodName == null) {
             return Optional.empty();
+        }
 
         final String methodData = jedis.hget(methodDetailsKey, DATA.name());
         final String sender = jedis.hget(methodDetailsKey, SENDER.name());
@@ -187,8 +184,25 @@ public final class DataHandling {
 
         final Object requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
 
-        final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData);
+        final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData, readMetaData(jedis, methodDetailsKey));
         return Optional.of(frame);
+    }
+
+    private static void saveMetaData(Transaction store, MetaDataHolder metaData, String detailsKey) {
+        if (metaData != null) {
+            if (metaData.getCorrelationId() != null) {
+                store.hset(detailsKey, MetaDataHolder.MetaDataFields.CORRELATION_ID.name(), metaData.getCorrelationId());
+            }
+            if (metaData.getUserRef() != null) {
+                store.hset(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name(), metaData.getUserRef());
+            }
+        }
+    }
+
+    private static MetaDataHolder readMetaData(Jedis jedis, String detailsKey) {
+        final String corrId = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.CORRELATION_ID.name());
+        final String userRef = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name());
+        return MetaDataHolder.build(corrId, userRef);
     }
 
 }

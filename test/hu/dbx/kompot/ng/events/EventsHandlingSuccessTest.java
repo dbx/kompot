@@ -62,7 +62,7 @@ public class EventsHandlingSuccessTest {
 
     private CommunicationEndpoint startConsumer(AtomicInteger counter, ExecutorService executor) {
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, executor);
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> {
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> {
             counter.incrementAndGet();
             LOGGER.info("Test Callback Processed");
             callback.success("OK");

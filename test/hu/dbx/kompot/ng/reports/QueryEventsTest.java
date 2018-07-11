@@ -66,7 +66,7 @@ public class QueryEventsTest {
         }
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, executor);
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> {
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> {
 
             {
                 final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",

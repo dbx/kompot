@@ -3,6 +3,7 @@ package hu.dbx.kompot.consumer.async.handler;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.EventDescriptorResolver;
 import hu.dbx.kompot.consumer.async.EventStatusCallback;
+import hu.dbx.kompot.moby.MetaDataHolder;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,12 +32,12 @@ public final class DefaultEventProcessorAdapter implements EventProcessorAdapter
     }
 
     @Override
-    public <TReq> void handle(EventDescriptor<TReq> eventMarker, TReq request, EventStatusCallback callback) {
+    public <TReq> void handle(EventDescriptor<TReq> eventMarker, MetaDataHolder metaDataHolder, TReq request, EventStatusCallback callback) {
         Optional<SelfDescribingEventProcessor<TReq>> processor = create(eventMarker);
         if (!processor.isPresent()) {
             throw new IllegalArgumentException("Can not handle event!");
         } else {
-            processor.get().handle(request, callback);
+            processor.get().handle(request, metaDataHolder, callback);
         }
     }
 

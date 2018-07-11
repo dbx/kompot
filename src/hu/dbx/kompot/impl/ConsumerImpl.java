@@ -231,24 +231,25 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     return;
                 }
 
-                final Optional<MethodRequestFrame> frame = DataHandling.readMethodFrame(store, getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
+                final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
 
-                if (!frame.isPresent()) {
+                if (!frameOp.isPresent()) {
                     LOGGER.debug("Could not read from method {}", methodKey);
                     // lejart a metodus?
                     return;
-                } else {
-                    store.zrem(getKeyNaming().unprocessedEventsByGroupKey(frame.get().getMethodMarker().getMethodGroupName()), frame.get().getIdentifier().toString());
-                    // esemenykezelok futtatasa
-                    methodEventListeners.forEach(x -> {
-                        try {
-                            x.onRequestReceived(frame.get());
-                        } catch (Throwable t) {
-                            LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
-                        }
-                    });
-
                 }
+
+                final MethodRequestFrame frame = frameOp.get();
+
+                store.zrem(getKeyNaming().unprocessedEventsByGroupKey(frame.getMethodMarker().getMethodGroupName()), frame.getIdentifier().toString());
+                // esemenykezelok futtatasa
+                methodEventListeners.forEach(x -> {
+                    try {
+                        x.onRequestReceived(frame);
+                    } catch (Throwable t) {
+                        LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
+                    }
+                });
 
                 try {
                     LOGGER.debug("Calling method processor");
@@ -256,7 +257,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
                     // TODO: irjuk be a folyamatban levo esemenyes soraba!
                     //noinspection unchecked
-                    final Object response = getMethodProcessorAdapter().call(frame.get().getMethodMarker(), frame.get().getMethodData());
+                    final Object response = getMethodProcessorAdapter().call(frame.getMethodMarker(), frame.getMethodData(), frame.getMetaData());
                     LOGGER.debug("Called method processor");
 
                     // TODO: use multi/exec here to write statuses and stuff.
@@ -266,7 +267,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     // esemenykezelok futtatasa
                     methodEventListeners.forEach(x -> {
                         try {
-                            x.onRequestProcessedSuccessfully(frame.get(), response);
+                            x.onRequestProcessedSuccessfully(frame, response);
                         } catch (Throwable t) {
                             LOGGER.error("Error when running method sending event listener for {}", t);
                         }
@@ -285,7 +286,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     // esemenykezelok futtatasa
                     methodEventListeners.forEach(x -> {
                         try {
-                            x.onRequestProcessingFailure(frame.get(), t);
+                            x.onRequestProcessingFailure(frame, t);
                         } catch (Throwable e) {
                             LOGGER.error("Error when running method sending event listener for {} on {}", e);
                         }
@@ -295,7 +296,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     // hogy nehogy lejarjon mire megjon a valasz!
                     store.expire(methodKey, 15);
 
-                    String responseNotificationChannel = getKeyNaming().getMessageResponseNotificationChannel(frame.get().getIdentifier());
+                    String responseNotificationChannel = getKeyNaming().getMessageResponseNotificationChannel(frame.getIdentifier());
                     LOGGER.debug("Notifying responging staff on {}", responseNotificationChannel);
 
                     store.publish(responseNotificationChannel, methodUuid.toString());
@@ -367,7 +368,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
                 callback.markProcessing();
                 LOGGER.trace("Elkezdtem dolgozni az esmenyen! {}", eventUuid);
-                getEventProcessorAdapter().handle(frame.getEventMarker(), frame.getEventData(), callback);
+                getEventProcessorAdapter().handle(frame.getEventMarker(), frame.getMetaData(), frame.getEventData(), callback);
 
                 consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable()));
 

@@ -108,7 +108,7 @@ public class QuerySingleEventTest {
         }
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, executor);
-        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, callback) -> {
+        consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> {
 
             //az esemény feldolgozás alatt van
             final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid[0]);
