@@ -22,6 +22,8 @@ public interface EventUpdates {
      */
     void removeEvent(UUID eventUuid, String eventGroup);
 
+    void clearCompletedEvents();
+
     //TODO: sendEvent???
     //TODO: updateEventData???
 }

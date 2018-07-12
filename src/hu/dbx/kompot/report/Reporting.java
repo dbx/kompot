@@ -237,4 +237,46 @@ public final class Reporting implements EventQueries, EventUpdates {
             //TODO: az adatelem törlése, ha nem kapcsolódik rá több group
         }
     }
+
+    @Override
+    public void clearCompletedEvents() {
+        try (Jedis jedis = pool.getResource()) {
+
+            final Set<String> completedGroupKeys = jedis.keys(keyNaming.processedEventsByGroupKey("*"));
+
+            final Map<String, Set<String>> groupKeyUuidMap = completedGroupKeys.stream()
+                    .map(key -> new AbstractMap.SimpleImmutableEntry<>(key, jedis.zrange(key, Long.MIN_VALUE, Long.MAX_VALUE)))
+                    .collect(Collectors.toMap(AbstractMap.SimpleImmutableEntry::getKey, AbstractMap.SimpleImmutableEntry::getValue));
+
+            groupKeyUuidMap.values().stream().flatMap(Collection::stream).map(UUID::fromString).forEach((final UUID uuid) -> {
+                final Optional<EventData> eventData = queryEvent(jedis, uuid);
+                if (!eventData.isPresent()) {
+                    return;
+                }
+
+                final String groupsStr = eventData.get().getGroups();
+                final Collection<String> groups = DataHandling.parseGroupsString(groupsStr);
+
+                boolean allGroupsDone = true;
+
+                for (final String group : groups) {
+                    final String groupListKey = keyNaming.processedEventsByGroupKey(group);
+                    final String groupEventDataKey = keyNaming.eventDetailsKey(group, uuid);
+
+                    if (groupKeyUuidMap.containsKey(groupListKey)) {
+                        jedis.zrem(groupListKey, uuid.toString());
+                        jedis.del(groupEventDataKey);
+                    } else {
+                        allGroupsDone = false;
+                    }
+                }
+
+                if (allGroupsDone) {
+                    jedis.del(keyNaming.eventDetailsKey(uuid));
+//                    jedis.del()
+                }
+            });
+
+        }
+    }
 }

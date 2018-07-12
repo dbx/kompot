@@ -14,11 +14,11 @@ import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisCommands;
-import redis.clients.jedis.PipelineBase;
 import redis.clients.jedis.Transaction;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,6 +28,7 @@ import static java.lang.String.join;
 public final class DataHandling {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
+    public static final String GROUP_SEPARATOR_CHAR = ",";
 
 
     public enum EventKeys {
@@ -94,13 +95,23 @@ public final class DataHandling {
         // TODO: use server time instead
         // store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(store.time().get().get(0)));
         store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(LocalDateTime.now()));
-        store.hsetnx(eventDetailsKey, GROUPS.name(), join(",", groups));
+        store.hsetnx(eventDetailsKey, GROUPS.name(), formatGroupsString(groups));
         store.hsetnx(eventDetailsKey, SENDER.name(), clientIdentity.getIdentifier());
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
 
         LOGGER.debug("Saved event details key.");
     }
+
+    @SuppressWarnings("WeakerAccess")
+    public static String formatGroupsString(Iterable<String> groups) {
+        return join(GROUP_SEPARATOR_CHAR, groups);
+    }
+
+    public static Collection<String> parseGroupsString(String groups) {
+        return Arrays.asList(groups.split(GROUP_SEPARATOR_CHAR));
+    }
+
 
     /**
      * Egy esemenyt rateszt a feldolgozando sorra es a history-ba is elmenti.
@@ -160,7 +171,7 @@ public final class DataHandling {
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
         jedis.hset(methodDetailsKey, DATA.name(), serialized);
 
-        saveMetaData(jedis,frame.getMetaData(), methodDetailsKey);
+        saveMetaData(jedis, frame.getMetaData(), methodDetailsKey);
 
         final int expiration = ((int) Math.ceil(((double) frame.getMethodMarker().getTimeout()) / 1000));
         LOGGER.debug("Setting expiration to {} seconds on key {}", expiration, methodDetailsKey);

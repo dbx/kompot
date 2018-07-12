@@ -77,7 +77,7 @@ public final class DefaultKeyNaming implements KeyNaming {
         if (isEmpty(groupCode)) {
             throw new NullPointerException("Group code is missing!");
         } else {
-            return prefix + ":ee:" + eventUuid + ":" + eventUuid;
+            return prefix + ":ee:" + groupCode + ":" + eventUuid;
         }
     }
 

@@ -16,7 +16,6 @@ public interface SelfDescribingEventProcessor<TReq> {
     /**
      * Static constructor
      */
-
     static <TReq> SelfDescribingEventProcessor<TReq> of(EventDescriptor<TReq> event, TriConsumer<TReq, MetaDataHolder, EventStatusCallback> bc) {
         return new SelfDescribingEventProcessor<TReq>() {
             @Override
@@ -54,31 +53,9 @@ public interface SelfDescribingEventProcessor<TReq> {
         return of(event, (eventData, metaData) -> handler.accept(eventData));
     }
 
-//    static <TReq> SelfDescribingEventProcessor<TReq> of(EventDescriptor<TReq> event, BiConsumer<TReq, EventStatusCallback> bc) {
-//        return new SelfDescribingEventProcessor<TReq>() {
-//            @Override
-//            public EventDescriptor<TReq> getEventMarker() {
-//                return event;
-//            }
-//
-//            @Override
-//            public void handle(TReq request, MetaDataHolder meta, EventStatusCallback callback) {
-//                bc.accept(request, callback);
-//            }
-//        };
-//    }
-
 
     @FunctionalInterface
     interface TriConsumer<T, U, V> {
         void accept(T t, U u, V v);
-
-//        default TriConsumer<T, U, V> andThen(TriConsumer<? super T, ? super U, ? super V> after) {
-//            Objects.requireNonNull(after);
-//            return (a, b, c) -> {
-//                accept(a, b, c);
-//                after.accept(a, b, c);
-//            };
-//        }
     }
 }
