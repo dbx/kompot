@@ -5,9 +5,7 @@ import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DataHandling.Statuses;
 import hu.dbx.kompot.impl.LoggerUtils;
 import org.slf4j.Logger;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Transaction;
+import redis.clients.jedis.*;
 
 import java.net.URI;
 import java.time.LocalDateTime;
@@ -245,33 +243,29 @@ public final class Reporting implements EventQueries, EventUpdates {
     @Override
     public void clearCompletedEvents() {
         try (Jedis jedis = pool.getResource()) {
+            String pointer = ScanParams.SCAN_POINTER_START;
+            ScanResult<String> step;
+            do {
+                step = jedis.scan(pointer, new ScanParams().match(keyNaming.allEventDetailsKey()).count(256));
 
-            final Set<String> eventDetails = jedis.keys(keyNaming.allEventDetailsKey());
+                pointer = step.getStringCursor();
+                step.getResult().stream()
+                        .filter(edk -> "0".equals(jedis.hget(edk, DataHandling.EventKeys.UNPROCESSED_GROUPS.name())))
+                        .forEach((final String eventDataKey) -> {
+                            final String groupsStr = jedis.hget(eventDataKey, DataHandling.EventKeys.GROUPS.name());
+                            final UUID uuid = parseUuidFromEventDataKey(eventDataKey);
 
-            final Set<String> eventDetailsToDelete = eventDetails.stream()
-                    .filter(edk -> "0".equals(jedis.hget(edk, DataHandling.EventKeys.UNPROCESSED_GROUPS.name())))
-                    .collect(Collectors.toSet());
+                            DataHandling.parseGroupsString(groupsStr).forEach(group -> {
+                                final String groupListKey = keyNaming.processedEventsByGroupKey(group);
+                                jedis.zrem(groupListKey, uuid.toString());
 
-            eventDetailsToDelete.forEach((final String eventDataKey) -> {
+                                final String groupEventDataKey = keyNaming.eventDetailsKey(group, uuid);
+                                jedis.del(groupEventDataKey);
+                            });
 
-                final String groupsStr = jedis.hget(eventDataKey, DataHandling.EventKeys.GROUPS.name());
-
-                final UUID uuid = parseUuidFromEventDataKey(eventDataKey);
-
-                final Collection<String> groups = DataHandling.parseGroupsString(groupsStr);
-
-                groups.forEach(group -> {
-
-                    final String groupListKey = keyNaming.processedEventsByGroupKey(group);
-                    final String groupEventDataKey = keyNaming.eventDetailsKey(group, uuid);
-
-                    jedis.zrem(groupListKey, uuid.toString());
-                    jedis.del(groupEventDataKey);
-                });
-
-                jedis.del(eventDataKey);
-            });
-
+                            jedis.del(eventDataKey);
+                        });
+            } while (!pointer.equals("0"));
         }
     }
 

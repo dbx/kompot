@@ -63,13 +63,15 @@ public class ClearProcessedEventsTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        for (int i = 0; i < 4; i++)
+        final int eventCount = 400;
+
+        for (int i = 0; i < eventCount; i++)
             producer.asyncSendEvent(EVENT_1, singletonMap("index", i));
 
         {
             //feldolgozás előtt álló események
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE, EventFilters.forStatus(DataHandling.Statuses.CREATED), Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(4, uuids.getTotal());
+            assertEquals(eventCount, uuids.getTotal());
         }
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, executor);
@@ -91,14 +93,14 @@ public class ClearProcessedEventsTest {
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
                     Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(2, uuids.getTotal());
+            assertEquals(eventCount / 2, uuids.getTotal());
         }
 
         {
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.ERROR),
                     Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(2, uuids.getTotal());
+            assertEquals(eventCount / 2, uuids.getTotal());
         }
 
         //WHEN
@@ -106,17 +108,19 @@ public class ClearProcessedEventsTest {
 
         //THEN
         {
+            // minden PROCESSED statuszu esemenyt kitakaritottunk!
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
                     Pagination.fromOffsetAndLimit(0, 1000));
             assertEquals(0, uuids.getTotal());
         }
 
+        // nem takaritunk ki ERROR statuszu eventeket
         {
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.ERROR),
                     Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(2, uuids.getTotal());
+            assertEquals(eventCount / 2, uuids.getTotal());
         }
     }
 
