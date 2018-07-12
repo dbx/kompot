@@ -10,6 +10,7 @@ import java.util.UUID;
  */
 public final class DefaultKeyNaming implements KeyNaming {
 
+    public static final String EVENT_DETAILS_PREFIX = ":ed:";
     private final String prefix;
 
     /**
@@ -68,8 +69,13 @@ public final class DefaultKeyNaming implements KeyNaming {
         if (eventId == null) {
             throw new NullPointerException("Event id must not be empty!");
         } else {
-            return prefix + ":ed:" + eventId;
+            return prefix + EVENT_DETAILS_PREFIX + eventId;
         }
+    }
+
+    @Override
+    public String allEventDetailsKey() {
+        return prefix + EVENT_DETAILS_PREFIX + "*";
     }
 
     @Override

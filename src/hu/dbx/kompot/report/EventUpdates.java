@@ -22,6 +22,9 @@ public interface EventUpdates {
      */
     void removeEvent(UUID eventUuid, String eventGroup);
 
+    /**
+     * Removes all data of fully processed events
+     */
     void clearCompletedEvents();
 
     //TODO: sendEvent???

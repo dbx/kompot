@@ -32,8 +32,9 @@ public class ResendEventTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT3", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT3");
+    private static final String CONSUMER_CODE = "CONS_RESEND_EVENT_TEST";
+    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of(CONSUMER_CODE, Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup(CONSUMER_CODE);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
     @Rule
@@ -53,9 +54,9 @@ public class ResendEventTest {
         UUID[] sentEventUuid = testInit.getSentEventUuid();
         Reporting reporting = testInit.getReporting();
 
-        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
+        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], "EVENT3");
+        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -72,9 +73,9 @@ public class ResendEventTest {
         Thread.sleep(500);
         consumer.stop();
 
-        Assert.assertEquals(DataHandling.Statuses.PROCESSED, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
+        Assert.assertEquals(DataHandling.Statuses.PROCESSED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], "EVENT3");
+        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
     }
 
     @Test
@@ -91,11 +92,11 @@ public class ResendEventTest {
         Thread.sleep(500);
         consumer.stop();
 
-        Assert.assertEquals(DataHandling.Statuses.PROCESSING, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
+        Assert.assertEquals(DataHandling.Statuses.PROCESSING, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], "EVENT3");
+        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
 
-        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
+        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
     }
 
     @Test
@@ -112,11 +113,11 @@ public class ResendEventTest {
         Thread.sleep(500);
         consumer.stop();
 
-        Assert.assertEquals(DataHandling.Statuses.ERROR, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
+        Assert.assertEquals(DataHandling.Statuses.ERROR, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], "EVENT3");
+        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
 
-        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent("EVENT3", sentEventUuid[0]).get().getStatus());
+        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
     }
 
     private class TestInit {

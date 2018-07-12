@@ -33,8 +33,9 @@ public class ClearProcessedEventsTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT2", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT2");
+    private static final String CONSUMER_CODE = "CONS_CLEAR_PROCESSED_EVENTS_TEST";
+    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of(CONSUMER_CODE, Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup(CONSUMER_CODE);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
 
@@ -42,6 +43,11 @@ public class ClearProcessedEventsTest {
     public TestRedis redis = TestRedis.build();
 
 
+    /**
+     * GIVEN: Küldünk 4 eseményt. Ötöt sikeresen feldolgozunk belőlük, ötöt eldobunk hibával.
+     * WHEN: Hívunk rá egy szerver takarítást
+     * THEN: Az 2 sikeresen feldolgozott esemény eltűnik
+     */
     @Test
     public void testClearProcessed() throws SerializationException, InterruptedException {
 
@@ -57,13 +63,13 @@ public class ClearProcessedEventsTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 4; i++)
             producer.asyncSendEvent(EVENT_1, singletonMap("index", i));
 
         {
             //feldolgozás előtt álló események
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2", EventFilters.forStatus(DataHandling.Statuses.CREATED), Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(10, uuids.getTotal());
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE, EventFilters.forStatus(DataHandling.Statuses.CREATED), Pagination.fromOffsetAndLimit(0, 1000));
+            assertEquals(4, uuids.getTotal());
         }
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, executor);
@@ -75,23 +81,24 @@ public class ClearProcessedEventsTest {
                 callback.success("OK! :)");
             } else {
                 callback.error("Not ok :(");
-            }        }));
+            }
+        }));
         consumer.start();
 
         Thread.sleep(1000);
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
                     Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(5, uuids.getTotal());
+            assertEquals(2, uuids.getTotal());
         }
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.ERROR),
                     Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(5, uuids.getTotal());
+            assertEquals(2, uuids.getTotal());
         }
 
         //WHEN
@@ -99,17 +106,17 @@ public class ClearProcessedEventsTest {
 
         //THEN
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
                     Pagination.fromOffsetAndLimit(0, 1000));
             assertEquals(0, uuids.getTotal());
         }
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids("EVENT2",
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.ERROR),
                     Pagination.fromOffsetAndLimit(0, 1000));
-            assertEquals(5, uuids.getTotal());
+            assertEquals(2, uuids.getTotal());
         }
     }
 

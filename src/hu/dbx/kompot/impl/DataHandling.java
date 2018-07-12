@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.StreamSupport;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
 import static java.lang.String.join;
@@ -47,6 +48,11 @@ public final class DataHandling {
          * Comma separated list of event names
          */
         GROUPS,
+
+        /**
+         * Integer value representing the number unprocessed groups
+         */
+        UNPROCESSED_GROUPS,
 
         /**
          * UUID of producer who initiated this event
@@ -97,6 +103,7 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(LocalDateTime.now()));
         store.hsetnx(eventDetailsKey, GROUPS.name(), formatGroupsString(groups));
         store.hsetnx(eventDetailsKey, SENDER.name(), clientIdentity.getIdentifier());
+        store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(StreamSupport.stream(groups.spliterator(), false).count()));
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
 
@@ -110,6 +117,12 @@ public final class DataHandling {
 
     public static Collection<String> parseGroupsString(String groups) {
         return Arrays.asList(groups.split(GROUP_SEPARATOR_CHAR));
+    }
+
+    public static void decrementUnprocessedGroupsCounter(Transaction store, KeyNaming keyNaming, UUID eventDataUuid) {
+        final String eventDetailsKey = keyNaming.eventDetailsKey(eventDataUuid);
+
+        store.hincrBy(eventDetailsKey, UNPROCESSED_GROUPS.name(), -1);
     }
 
 

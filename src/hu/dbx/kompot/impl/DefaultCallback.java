@@ -77,8 +77,8 @@ final class DefaultCallback implements EventStatusCallback {
             } else if (status == DataHandling.Statuses.PROCESSED) {
                 multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
                 DataHandling.zaddNow(multi, keyNaming.processedEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.decrementUnprocessedGroupsCounter(multi, keyNaming, eventId);
             }
-
 
             multi.exec();
         }

@@ -53,6 +53,12 @@ public interface KeyNaming {
     String eventDetailsKey(UUID eventId);
 
     /**
+     * Returns all the event details
+     */
+    String allEventDetailsKey();
+
+
+    /**
      * Event details for a given processor come here.
      *
      * @throws NullPointerException when any parameter is empty
