@@ -222,6 +222,10 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
                 // a metodus cucca ide megy.
                 final String methodKey = getKeyNaming().methodDetailsKey(methodUuid);
+
+                // ebben fogom tarolni a metodus hivas reszleteit.
+                MethodRequestFrame frame = null;
+
                 LOGGER.debug("Trying to steal from {}", methodKey);
                 Long result = store.hsetnx(methodKey, "owner", getConsumerIdentity().getIdentifier());
 
@@ -231,27 +235,29 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     return;
                 }
 
-                final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
-
-                if (!frameOp.isPresent()) {
-                    LOGGER.debug("Could not read from method {}", methodKey);
-                    // lejart a metodus?
-                    return;
-                }
-
-                final MethodRequestFrame frame = frameOp.get();
-
-                store.zrem(getKeyNaming().unprocessedEventsByGroupKey(frame.getMethodMarker().getMethodGroupName()), frame.getIdentifier().toString());
-                // esemenykezelok futtatasa
-                methodEventListeners.forEach(x -> {
-                    try {
-                        x.onRequestReceived(frame);
-                    } catch (Throwable t) {
-                        LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
-                    }
-                });
-
+                // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar egyem az ownership.
                 try {
+                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
+
+                    if (!frameOp.isPresent()) {
+                        LOGGER.debug("Could not read from method {}", methodKey);
+                        // lejart a metodus?
+                        return;
+                    }
+
+                    frame = frameOp.get();
+                    final MethodRequestFrame mrf = frame;
+
+                    store.zrem(getKeyNaming().unprocessedEventsByGroupKey(frame.getMethodMarker().getMethodGroupName()), frame.getIdentifier().toString());
+                    // esemenykezelok futtatasa
+                    methodEventListeners.forEach(x -> {
+                        try {
+                            x.onRequestReceived(mrf);
+                        } catch (Throwable t) {
+                            LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
+                        }
+                    });
+
                     LOGGER.debug("Calling method processor");
                     // siker eseten visszairjuk a sikeres vackot
 
@@ -267,7 +273,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     // esemenykezelok futtatasa
                     methodEventListeners.forEach(x -> {
                         try {
-                            x.onRequestProcessedSuccessfully(frame, response);
+                            x.onRequestProcessedSuccessfully(mrf, response);
                         } catch (Throwable t) {
                             LOGGER.error("Error when running method sending event listener for {}", t);
                         }
@@ -276,34 +282,40 @@ public final class ConsumerImpl implements Consumer, Runnable {
                     LOGGER.debug("Written response stuff");
                 } catch (Throwable t) {
                     // TODO: irjuk be a hibas esemenyek soraba!
-                    LOGGER.error("Hiba a metodus feldolgozasa kozben!", t);
-                    final Transaction tx = store.multi();
-                    tx.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), "ERROR");
-                    tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_CLASS.name(), t.getClass().getName());
-                    tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE.name(), t.getMessage());
-                    tx.exec();
 
-                    // esemenykezelok futtatasa
-                    methodEventListeners.forEach(x -> {
-                        try {
-                            x.onRequestProcessingFailure(frame, t);
-                        } catch (Throwable e) {
-                            LOGGER.error("Error when running method sending event listener for {} on {}", e);
-                        }
-                    });
+                    writeMethodFailure(store, methodKey, t);
+
+                    if (frame != null) {
+                        final MethodRequestFrame mrf = frame;
+                        // esemenykezelok futtatasa
+                        methodEventListeners.forEach(x -> {
+                            try {
+                                x.onRequestProcessingFailure(mrf, t);
+                            } catch (Throwable e) {
+                                LOGGER.error("Error when running method sending event listener for {} on {}", e);
+                            }
+                        });
+                    }
 
                 } finally {
                     // hogy nehogy lejarjon mire megjon a valasz!
                     store.expire(methodKey, 15);
 
-                    String responseNotificationChannel = getKeyNaming().getMessageResponseNotificationChannel(frame.getIdentifier());
+                    String responseNotificationChannel = getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
                     LOGGER.debug("Notifying responging staff on {}", responseNotificationChannel);
 
                     store.publish(responseNotificationChannel, methodUuid.toString());
                 }
-            } catch (Throwable e) {
-                throw new RuntimeException(e);
             }
+        }
+
+        private void writeMethodFailure(Jedis store, String methodKey, Throwable t) {
+            LOGGER.error("Hiba a metodus feldolgozasa kozben!", t);
+            final Transaction tx = store.multi();
+            tx.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), "ERROR");
+            tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_CLASS.name(), t.getClass().getName());
+            tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE.name(), t.getMessage());
+            tx.exec();
         }
     }
 

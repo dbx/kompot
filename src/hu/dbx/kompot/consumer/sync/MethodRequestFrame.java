@@ -35,7 +35,7 @@ public final class MethodRequestFrame<Req> {
 
 
     /**
-     * Unique identifier of event. Defaults to random UUID value.
+     * Unique identifier of method. Defaults to random UUID value.
      */
     private final UUID identifier;
 
