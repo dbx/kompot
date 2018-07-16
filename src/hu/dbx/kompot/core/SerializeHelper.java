@@ -17,6 +17,7 @@ import redis.clients.jedis.Jedis;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.EXCEPTION_CLASS;
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE;
@@ -40,19 +41,28 @@ public final class SerializeHelper {
      */
     private final static String SEPARATOR = ",";
 
+    private final static AtomicReference<ObjectMapper> objectMapper = new AtomicReference<>(new ObjectMapper());
+
+    public static ObjectMapper getObjectMapper() {
+        return objectMapper.get();
+    }
+
+    public static void setObjectMapper(ObjectMapper newObjectMapper) {
+        objectMapper.set(newObjectMapper);
+    }
+
     public static String serializeMap(Map<String, Object> map) throws SerializationException {
         try {
-            return new ObjectMapper().writeValueAsString(map);
+            return getObjectMapper().writeValueAsString(map);
         } catch (JsonProcessingException e) {
             throw new SerializationException(map, "Could not serialize event data");
         }
     }
 
-
     public static Map<String, Object> deserializeMap(String str) throws DeserializationException {
         try {
             //noinspection unchecked
-            return (Map<String, Object>) (new ObjectMapper().readValue(str, Map.class));
+            return (Map<String, Object>) (getObjectMapper().readValue(str, Map.class));
         } catch (IOException e) {
             throw new DeserializationException(str, "Could not deserialize Map", e);
         }
@@ -65,7 +75,7 @@ public final class SerializeHelper {
      */
     public static String serializeDataOnly(EventFrame frame) throws SerializationException {
         try {
-            return new ObjectMapper().writeValueAsString(frame.getEventData());
+            return getObjectMapper().writeValueAsString(frame.getEventData());
         } catch (JsonProcessingException e) {
             throw new SerializationException(frame, "Could not serialize event data");
         }
@@ -88,7 +98,7 @@ public final class SerializeHelper {
         final Class targetClass = marker.get().getRequestClass();
 
         try {
-            return (new ObjectMapper().readValue(content, targetClass));
+            return (getObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for event " + eventName + ", class: " + targetClass;
             throw new DeserializationException(content, message, e);
@@ -100,7 +110,7 @@ public final class SerializeHelper {
 
         try {
             //noinspection UnnecessaryParentheses,unchecked
-            return (new ObjectMapper().readValue(content, targetClass));
+            return (getObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for method " + marker.getMethodName() + ", class: " + targetClass;
             throw new DeserializationException(content, message, e);
@@ -118,7 +128,7 @@ public final class SerializeHelper {
 
         try {
             //noinspection unchecked
-            return (new ObjectMapper().readValue(content, targetClass));
+            return (getObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for method " + methodName + " class: " + targetClass;
             throw new DeserializationException(content, message, e);
@@ -134,7 +144,7 @@ public final class SerializeHelper {
         Class targetClass = marker.get().getRequestClass();
 
         try {
-            return (new ObjectMapper().readValue(content, targetClass));
+            return (getObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for broadcast " + broadcastCode + ", class: " + targetClass;
             throw new DeserializationException(content, message, e);
@@ -143,7 +153,7 @@ public final class SerializeHelper {
 
     public static String serializeObject(Object object) throws SerializationException {
         try {
-            return new ObjectMapper().writeValueAsString(object);
+            return getObjectMapper().writeValueAsString(object);
         } catch (JsonProcessingException e) {
             throw new SerializationException(object, "Could not serialize any data");
         }
