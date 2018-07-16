@@ -6,10 +6,11 @@ package hu.dbx.kompot.exceptions;
 public final class DeserializationException extends Exception {
     private final String source;
 
-    public DeserializationException(String source, String message) {
-        super(message);
+    public DeserializationException(String source, String message, Exception sourceException) {
+        super(message, sourceException);
         this.source = source;
     }
+
 
     /**
      * The value we could not deserialize

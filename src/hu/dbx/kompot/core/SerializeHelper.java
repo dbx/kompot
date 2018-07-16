@@ -51,9 +51,10 @@ public final class SerializeHelper {
 
     public static Map<String, Object> deserializeMap(String str) throws DeserializationException {
         try {
+            //noinspection unchecked
             return (Map<String, Object>) (new ObjectMapper().readValue(str, Map.class));
         } catch (IOException e) {
-            throw new DeserializationException(str, "Could not deserialize Map");
+            throw new DeserializationException(str, "Could not deserialize Map", e);
         }
     }
 
@@ -90,7 +91,7 @@ public final class SerializeHelper {
             return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for event " + eventName + ", class: " + targetClass;
-            throw new DeserializationException(content, message);
+            throw new DeserializationException(content, message, e);
         }
     }
 
@@ -98,10 +99,11 @@ public final class SerializeHelper {
         final Class targetClass = marker.getResponseClass();
 
         try {
+            //noinspection UnnecessaryParentheses,unchecked
             return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for method " + marker.getMethodName() + ", class: " + targetClass;
-            throw new DeserializationException(content, message);
+            throw new DeserializationException(content, message, e);
         }
     }
 
@@ -115,10 +117,11 @@ public final class SerializeHelper {
         final Class targetClass = marker.get().getRequestClass();
 
         try {
+            //noinspection unchecked
             return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for method " + methodName + " class: " + targetClass;
-            throw new DeserializationException(content, message);
+            throw new DeserializationException(content, message, e);
         }
     }
 
@@ -134,7 +137,7 @@ public final class SerializeHelper {
             return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
             String message = "Could not deserialize payload for broadcast " + broadcastCode + ", class: " + targetClass;
-            throw new DeserializationException(content, message);
+            throw new DeserializationException(content, message, e);
         }
     }
 
