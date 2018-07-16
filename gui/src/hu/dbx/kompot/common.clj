@@ -3,8 +3,11 @@
 
 (set! *warn-on-reflection* true)
 
-(defstate KVStore :start (hu.dbx.kompot.impl.RedisKVStore/buildDefault))
-(defstate Naming :start (new hu.dbx.kompot.impl.DefaultKeyNaming "moby"))
-(defstate Reporting :start (new hu.dbx.kompot.report.Reporting KVStore Naming))
+(defstate redis-uri :start (new java.net.URI "redis://localhost:16379/1"))
 
-;; itt csak egy CommunicationEndpoint vegpont kell
+(defstate kompot-prefix :start "moby")
+
+(defstate key-naming :start (hu.dbx.kompot.impl.DefaultKeyNaming/ofPrefix (str kompot-prefix)))
+
+(defstate Reporting :start
+  (hu.dbx.kompot.report.Reporting/ofRedisConnectionUri redis-uri key-naming))

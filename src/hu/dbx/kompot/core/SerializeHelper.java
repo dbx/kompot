@@ -79,44 +79,62 @@ public final class SerializeHelper {
      */
     @SuppressWarnings("unchecked")
     public static Object deserializeContentOnly(String eventName, String content, EventDescriptorResolver resolver) throws DeserializationException {
+        final Optional<EventDescriptor> marker = resolver.resolveMarker(eventName);
+        if (!marker.isPresent()) {
+            throw new IllegalArgumentException("Can not get marker for event name " + eventName);
+        }
+
+        final Class targetClass = marker.get().getRequestClass();
+
         try {
-            final Optional<EventDescriptor> marker = resolver.resolveMarker(eventName);
-            if (!marker.isPresent())
-                throw new IllegalArgumentException("Can not get marker for event name " + eventName);
-            return (new ObjectMapper().readValue(content, marker.get().getRequestClass()));
+            return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
-            throw new DeserializationException(content, "Could not deserialize payload for " + eventName);
+            String message = "Could not deserialize payload for event " + eventName + ", class: " + targetClass;
+            throw new DeserializationException(content, message);
         }
     }
 
     public static Object deserializeResponse(String content, MethodDescriptor marker) throws DeserializationException {
+        final Class targetClass = marker.getResponseClass();
+
         try {
-            return (new ObjectMapper().readValue(content, marker.getResponseClass()));
+            return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
-            throw new DeserializationException(content, "Could not deserialize payload for " + marker.getMethodName());
+            String message = "Could not deserialize payload for method " + marker.getMethodName() + ", class: " + targetClass;
+            throw new DeserializationException(content, message);
         }
     }
 
     public static Object deserializeRequest(String methodName, String content, MethodDescriptorResolver resolver) throws DeserializationException {
+        final Optional<MethodDescriptor> marker = resolver.resolveMarker(methodName);
+
+        if (!marker.isPresent()) {
+            throw new IllegalArgumentException("Can not get marker for method name " + methodName);
+        }
+
+        final Class targetClass = marker.get().getRequestClass();
+
         try {
-            final Optional<MethodDescriptor> marker = resolver.resolveMarker(methodName);
-            if (!marker.isPresent())
-                throw new IllegalArgumentException("Can not get marker for method name " + methodName);
-            return (new ObjectMapper().readValue(content, marker.get().getRequestClass()));
+            return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
-            throw new DeserializationException(content, "Could not deserialize payload for " + methodName);
+            String message = "Could not deserialize payload for method " + methodName + " class: " + targetClass;
+            throw new DeserializationException(content, message);
         }
     }
 
     @SuppressWarnings("unchecked")
     public static Object deserializeBroadcast(BroadcastDescriptorResolver resolver, String broadcastCode, String content) throws DeserializationException {
+        final Optional<BroadcastDescriptor> marker = resolver.resolveMarker(broadcastCode);
+        if (!marker.isPresent()) {
+            throw new IllegalArgumentException("Can not get broadcast type for name " + broadcastCode);
+        }
+        Class targetClass = marker.get().getRequestClass();
+
         try {
-            final Optional<BroadcastDescriptor> marker = resolver.resolveMarker(broadcastCode);
-            if (!marker.isPresent())
-                throw new IllegalArgumentException("Can not get broadcast type for name " + broadcastCode);
-            return (new ObjectMapper().readValue(content, marker.get().getRequestClass()));
+            return (new ObjectMapper().readValue(content, targetClass));
         } catch (IOException e) {
-            throw new DeserializationException(content, "Could not deserialize payload for " + broadcastCode);
+            String message = "Could not deserialize payload for broadcast " + broadcastCode + ", class: " + targetClass;
+            throw new DeserializationException(content, message);
         }
     }
 

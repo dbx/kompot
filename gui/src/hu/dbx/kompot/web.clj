@@ -37,9 +37,9 @@
    [:div.tabs.is-toggle.is-centered.is-small
     [:ul
      [:li.is-active [:a [:span "Events"]]]
-     #_ [:li [:a [:span "Messages"]]]
-     #_[:li [:a [:span "Modules"]]]
-     #_[:li [:a [:span "Status"]]]]]])
+     [:li [:a [:span "Messages"]]]
+     [:li [:a [:span "Broadcasts"]]]
+     [:li [:a [:span "Statuses"]]]]]])
 
 (def status-style {"processing" "background:hsl(48, 100%, 67%)"
                    "failed"     "background:hsl(348, 80%, 81%)"})
@@ -57,7 +57,7 @@
   [:span.icon [(keyword (str "i.fa.fa-" (name icon-name)))]])
 
 (defn render-status-tag [status]
-  (case status
+  (case (.toLowerCase (str status))
     ("" nil)                  [:span.tag.is-rounded "???"]
     ("done" "processed" "ok") [:span.tag.is-rounded.is-success (icon :check) status]
     ("processing")            [:span.tag.is-rounded.is-warning (icon :exclamation-circle) status]

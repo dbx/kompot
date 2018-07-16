@@ -25,4 +25,9 @@ public final class EventGroupData {
     public DataHandling.Statuses getStatus() {
         return status;
     }
+
+    @Override
+    public String toString() {
+        return "Event Group Data of " + eventGroupName + ":" + status;
+    }
 }
