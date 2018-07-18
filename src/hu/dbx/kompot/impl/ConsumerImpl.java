@@ -420,9 +420,10 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
         @Override
         public Trampoline jump() {
+            final String groupCode = getConsumerIdentity().getEventGroup();
+            final String dbKey = getKeyNaming().unprocessedEventsByGroupKey(groupCode);
+
             try (final Jedis store = consumerConfig.getPool().getResource()) {
-                final String groupCode = getConsumerIdentity().getEventGroup();
-                final String dbKey = getKeyNaming().unprocessedEventsByGroupKey(groupCode);
                 final Set<String> elems = store.zrangeByScore(dbKey, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, 1);
 
                 if (elems != null && !elems.isEmpty()) {

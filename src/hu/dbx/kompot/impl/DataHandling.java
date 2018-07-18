@@ -207,8 +207,9 @@ public final class DataHandling {
         if (!descriptor.isPresent()) return Optional.empty();
 
         final Object requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
+        final MetaDataHolder methodMeta = readMetaData(jedis, methodDetailsKey);
 
-        final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData, readMetaData(jedis, methodDetailsKey));
+        final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData, methodMeta);
         return Optional.of(frame);
     }
 
