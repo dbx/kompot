@@ -44,7 +44,7 @@ public class MethodHandlingRemoteReturnsNullTest {
 
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11));
 
-        Map r = (Map) response.get(10, TimeUnit.SECONDS);
+        Map r = response.get(10, TimeUnit.SECONDS);
 
         assertNull(r);
 
@@ -57,7 +57,7 @@ public class MethodHandlingRemoteReturnsNullTest {
      * But we must not send null as request data.
      */
     @Test
-    public void failOnNulLRequestData() throws InterruptedException, SerializationException, TimeoutException, ExecutionException {
+    public void failOnNulLRequestData() throws SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), consumerIdentity, executor);
 
