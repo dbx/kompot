@@ -2,13 +2,11 @@ package hu.dbx.kompot.impl;
 
 import hu.dbx.kompot.consumer.Consumer;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
-import hu.dbx.kompot.consumer.async.EventFrame;
 import hu.dbx.kompot.consumer.async.handler.EventProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastProcessorFactory;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
 import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
-import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
@@ -18,7 +16,6 @@ import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPubSub;
-import redis.clients.jedis.Transaction;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -89,7 +86,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 //noinspection unused
                 final String methodName = channel.substring(2);
                 try {
-                    consumerConfig.getExecutor().execute(new MethodRunnable(UUID.fromString(message)));
+                    MethodRunnable runnable = new MethodRunnable(ConsumerImpl.this, consumerConfig, methodEventListeners, consumerHandlers, UUID.fromString(message));
+                    consumerConfig.getExecutor().execute(runnable);
                 } catch (RejectedExecutionException rejected) {
                     LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
                 }
@@ -109,7 +107,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         startLatch.await();
 
         // we start processing earlier events.
-        consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable()));
+        consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers)));
     }
 
     public void shutdown() {
@@ -146,10 +144,17 @@ public final class ConsumerImpl implements Consumer, Runnable {
      */
     private String[] getPubSubChannels() {
         List<String> channels = new LinkedList<>();
+
+        // nekem cimzett esemenyek
         channels.add("e:" + getConsumerIdentity().getEventGroup());
+
+        // nekem cimzett metodusok
         channels.add("m:" + getConsumerIdentity().getMessageGroup());
 
+        // tamogatott broadcast uzenet tipusok
         consumerHandlers.getBroadcastProcessorFactory().getSupportedBroadcasts().forEach(b -> channels.add("b:" + b.getBroadcastCode()));
+
+        // szemelyesen nekem cimzett visszajelzesek
         channels.add("id:" + getConsumerIdentity().getIdentifier());
 
         return channels.toArray(new String[]{});
@@ -207,118 +212,6 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
-    private final class MethodRunnable implements Runnable {
-
-        private final UUID methodUuid;
-
-        private MethodRunnable(UUID methodUuid) {
-            this.methodUuid = methodUuid;
-        }
-
-        @Override
-        public void run() {
-            try (final Jedis store = consumerConfig.getPool().getResource()) {
-                // try to assign this method to self
-
-                // a metodus cucca ide megy.
-                final String methodKey = getKeyNaming().methodDetailsKey(methodUuid);
-
-                // ebben fogom tarolni a metodus hivas reszleteit.
-                MethodRequestFrame frame = null;
-
-                LOGGER.debug("Trying to steal from {}", methodKey);
-                Long result = store.hsetnx(methodKey, "owner", getConsumerIdentity().getIdentifier());
-
-                if (result == 0) {
-                    LOGGER.debug("Could not steal {}", methodKey);
-                    // some other instance has already took this item, we do nothing
-                    return;
-                }
-
-                // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar egyem az ownership.
-                try {
-                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
-
-                    if (!frameOp.isPresent()) {
-                        LOGGER.debug("Could not read from method {}", methodKey);
-                        // lejart a metodus?
-                        return;
-                    }
-
-                    frame = frameOp.get();
-                    final MethodRequestFrame mrf = frame;
-
-                    store.zrem(getKeyNaming().unprocessedEventsByGroupKey(frame.getMethodMarker().getMethodGroupName()), frame.getIdentifier().toString());
-                    // esemenykezelok futtatasa
-                    methodEventListeners.forEach(x -> {
-                        try {
-                            x.onRequestReceived(mrf);
-                        } catch (Throwable t) {
-                            LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
-                        }
-                    });
-
-                    LOGGER.debug("Calling method processor");
-                    // siker eseten visszairjuk a sikeres vackot
-
-                    // TODO: irjuk be a folyamatban levo esemenyes soraba!
-                    //noinspection unchecked
-                    final Object response = getMethodProcessorAdapter().call(frame.getMethodMarker(), frame.getMethodData(), frame.getMetaData());
-                    LOGGER.debug("Called method processor");
-
-                    // TODO: use multi/exec here to write statuses and stuff.
-                    store.hset(methodKey, DataHandling.MethodResponseKeys.RESPONSE.name(), SerializeHelper.serializeObject(response));
-                    store.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), DataHandling.Statuses.PROCESSED.name());
-
-                    // esemenykezelok futtatasa
-                    methodEventListeners.forEach(x -> {
-                        try {
-                            x.onRequestProcessedSuccessfully(mrf, response);
-                        } catch (Throwable t) {
-                            LOGGER.error("Error when running method sending event listener for {}", t);
-                        }
-                    });
-
-                    LOGGER.debug("Written response stuff");
-                } catch (Throwable t) {
-                    // TODO: irjuk be a hibas esemenyek soraba!
-
-                    writeMethodFailure(store, methodKey, t);
-
-                    if (frame != null) {
-                        final MethodRequestFrame mrf = frame;
-                        // esemenykezelok futtatasa
-                        methodEventListeners.forEach(x -> {
-                            try {
-                                x.onRequestProcessingFailure(mrf, t);
-                            } catch (Throwable e) {
-                                LOGGER.error("Error when running method sending event listener for {} on {}", e);
-                            }
-                        });
-                    }
-
-                } finally {
-                    // hogy nehogy lejarjon mire megjon a valasz!
-                    store.expire(methodKey, 15);
-
-                    String responseNotificationChannel = getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
-                    LOGGER.debug("Notifying responging staff on {}", responseNotificationChannel);
-
-                    store.publish(responseNotificationChannel, methodUuid.toString());
-                }
-            }
-        }
-
-        private void writeMethodFailure(Jedis store, String methodKey, Throwable t) {
-            LOGGER.error("Hiba a metodus feldolgozasa kozben!", t);
-            final Transaction tx = store.multi();
-            tx.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), "ERROR");
-            tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_CLASS.name(), t.getClass().getName());
-            tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE.name(), t.getMessage());
-            tx.exec();
-        }
-    }
-
     /**
      * Elindit egy esemeny feldolgozast, ha egyelore nincsen tobb feldolgozo, mint MAX_EVENTS.
      *
@@ -331,7 +224,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
             throw new IllegalArgumentException("can not start processing event will null uuid!");
         } else if (processingEvents.incrementAndGet() < MAX_EVENTS) {
             try {
-                consumerConfig.getExecutor().execute(new TrampolineRunner(new EventRunnable(eventUuid)));
+                consumerConfig.getExecutor().execute(new TrampolineRunner(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid)));
             } catch (RejectedExecutionException e) {
                 LOGGER.debug("Could not execute event of id {}", eventUuid);
                 processingEvents.decrementAndGet();
@@ -343,64 +236,15 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
-    // csokkenti a folyamatban levo eventek szamat.
-    private final class EventRunnable implements Trampoline {
-        private final UUID eventUuid;
-
-        EventRunnable(UUID uuid) {
-            this.eventUuid = uuid;
-        }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public Trampoline jump() {
-            try {
-                final DefaultCallback callback = new DefaultCallback(consumerConfig.getPool(), eventUuid, getKeyNaming(), getConsumerIdentity());
-
-                final EventFrame frame;
-                try (final Jedis store = consumerConfig.getPool().getResource()) {
-
-                    final String groupCode = getConsumerIdentity().getEventGroup();
-                    // megprobaljuk ellopni
-
-                    long result = store.hsetnx(getKeyNaming().eventDetailsKey(groupCode, eventUuid), "owner", getConsumerIdentity().getIdentifier());
-
-                    if (result == 0) {
-                        LOGGER.trace("Some other instance of {} has already gathered evt {}", groupCode, eventUuid);
-                        return new AfterEventRunnable();
-                    } else {
-                        // itt a versenyhelyzet elkerulese miatt remove van. ha ezt kiszedjuk, megnonek a logok.
-                        store.zrem(getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
-                        frame = DataHandling.readEventFrame(store, getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
-                    }
-                } catch (DeserializationException e) {
-                    callback.error(e);
-                    return new AfterEventRunnable();
-                }
-
-                callback.markProcessing();
-                LOGGER.trace("Elkezdtem dolgozni az esmenyen! {}", eventUuid);
-                getEventProcessorAdapter().handle(frame.getEventMarker(), frame.getMetaData(), frame.getEventData(), callback);
-
-                consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable()));
-
-                // TODO: itt neki kellene allni feldolgozni mas, beragadt esemenyeket is.
-            } finally {
-                processingEvents.decrementAndGet();
-            }
-            return new AfterEventRunnable();
-        }
-    }
-
     interface Trampoline {
         Trampoline jump();
     }
 
     // kap egy trampoline peldanyt es megprobalja megfuttatni.
-    private final class TrampolineRunner implements Runnable {
+    public final static class TrampolineRunner implements Runnable {
         private Trampoline trampoline;
 
-        private TrampolineRunner(Trampoline t) {
+        public TrampolineRunner(Trampoline t) {
             trampoline = t;
         }
 
@@ -412,31 +256,6 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
-    /**
-     * Run it after every events.
-     * Looks for events in the pool. Tries to
-     */
-    private final class AfterEventRunnable implements Trampoline {
-
-        @Override
-        public Trampoline jump() {
-            final String groupCode = getConsumerIdentity().getEventGroup();
-            final String dbKey = getKeyNaming().unprocessedEventsByGroupKey(groupCode);
-
-            try (final Jedis store = consumerConfig.getPool().getResource()) {
-                final Set<String> elems = store.zrangeByScore(dbKey, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, 1);
-
-                if (elems != null && !elems.isEmpty()) {
-                    final UUID eventUuid = UUID.fromString(elems.iterator().next());
-                    return new EventRunnable(eventUuid);
-                }
-            } catch (Throwable t) {
-                LOGGER.error("Error on automatic event processing: ", t);
-            }
-            return null;
-        }
-    }
-
     public void addMethodReceivingCallback(MethodReceivingCallback listener) {
         if (listener == null) {
             throw new IllegalArgumentException("Method evt listener must not be null!");
@@ -445,6 +264,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
+    // TODO: write tests
     public void removeMethodReceivingCallback(MethodReceivingCallback listener) {
         if (listener == null) {
             throw new IllegalArgumentException("Method sending event listener must not be null!");

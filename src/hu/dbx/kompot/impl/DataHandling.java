@@ -150,7 +150,6 @@ public final class DataHandling {
         tx.zadd(k, weight, value);
     }
 
-
     @SuppressWarnings("unchecked")
     static EventFrame readEventFrame(Jedis jedis, KeyNaming keyNaming, EventDescriptorResolver eventResolver, UUID eventUuid) throws DeserializationException {
         final String eventDetailsKey = keyNaming.eventDetailsKey(eventUuid);
@@ -163,13 +162,20 @@ public final class DataHandling {
         final Object eventDataObj = SerializeHelper.deserializeContentOnly(eventName, eventData, eventResolver);
         final Optional<EventDescriptor> eventMarker = eventResolver.resolveMarker(eventName);
 
-        EventFrame response = new EventFrame();
-        response.setEventMarker(eventMarker.get());
-        response.setEventData(eventDataObj);
-        response.setIdentifier(eventUuid);
-        response.setSourceIdentifier(null); // did not set now.
-        response.setMetaData(readMetaData(jedis, eventDetailsKey));
-        return response;
+        if (!eventMarker.isPresent()) {
+            String template = "Could not resolve event marker for event code=%s uuid=%s";
+            String msg = String.format(template, eventName, eventUuid.toString());
+            LOGGER.error(msg);
+            throw new IllegalStateException(msg);
+        } else {
+            EventFrame response = new EventFrame();
+            response.setEventMarker(eventMarker.get());
+            response.setEventData(eventDataObj);
+            response.setIdentifier(eventUuid);
+            response.setSourceIdentifier(null); // did not set now.
+            response.setMetaData(readMetaData(jedis, eventDetailsKey));
+            return response;
+        }
     }
 
     static void writeMethodFrame(Transaction jedis, KeyNaming keyNaming, MethodRequestFrame frame) throws SerializationException {
