@@ -12,7 +12,6 @@ import hu.dbx.kompot.impl.DefaultKeyNaming;
 import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.Reporting;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -23,9 +22,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
+import static org.junit.Assert.assertEquals;
 
 @SuppressWarnings("ConstantConditions")
 public class ResendEventTest {
@@ -51,19 +52,19 @@ public class ResendEventTest {
     public void invalidResendStateUnprocessedTest() throws SerializationException {
 
         TestInit testInit = new TestInit().invoke();
-        UUID[] sentEventUuid = testInit.getSentEventUuid();
+        UUID sentEventUuid = testInit.getSentEventUuid();
         Reporting reporting = testInit.getReporting();
 
-        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
+        assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
+        reporting.resendEvent(sentEventUuid, CONSUMER_CODE);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void invalidResendStateProcessedTest() throws SerializationException, InterruptedException {
 
         TestInit testInit = new TestInit().invoke();
-        UUID[] sentEventUuid = testInit.getSentEventUuid();
+        UUID sentEventUuid = testInit.getSentEventUuid();
         Reporting reporting = testInit.getReporting();
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, testInit.getExecutor());
@@ -73,16 +74,16 @@ public class ResendEventTest {
         Thread.sleep(500);
         consumer.stop();
 
-        Assert.assertEquals(DataHandling.Statuses.PROCESSED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
+        assertEquals(DataHandling.Statuses.PROCESSED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
+        reporting.resendEvent(sentEventUuid, CONSUMER_CODE);
     }
 
     @Test
     public void resendProcessingEvent() throws SerializationException, InterruptedException {
 
         TestInit testInit = new TestInit().invoke();
-        UUID[] sentEventUuid = testInit.getSentEventUuid();
+        UUID sentEventUuid = testInit.getSentEventUuid();
         Reporting reporting = testInit.getReporting();
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, testInit.getExecutor());
@@ -92,18 +93,18 @@ public class ResendEventTest {
         Thread.sleep(500);
         consumer.stop();
 
-        Assert.assertEquals(DataHandling.Statuses.PROCESSING, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
+        assertEquals(DataHandling.Statuses.PROCESSING, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
+        reporting.resendEvent(sentEventUuid, CONSUMER_CODE);
 
-        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
+        assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
     }
 
     @Test
     public void resendErroneousEvent() throws SerializationException, InterruptedException {
 
         TestInit testInit = new TestInit().invoke();
-        UUID[] sentEventUuid = testInit.getSentEventUuid();
+        UUID sentEventUuid = testInit.getSentEventUuid();
         Reporting reporting = testInit.getReporting();
 
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.empty(), consumerIdentity, testInit.getExecutor());
@@ -113,24 +114,24 @@ public class ResendEventTest {
         Thread.sleep(500);
         consumer.stop();
 
-        Assert.assertEquals(DataHandling.Statuses.ERROR, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
+        assertEquals(DataHandling.Statuses.ERROR, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid[0], CONSUMER_CODE);
+        reporting.resendEvent(sentEventUuid, CONSUMER_CODE);
 
-        Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid[0]).get().getStatus());
+        assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
     }
 
     private class TestInit {
         private ExecutorService executor;
-        private UUID[] sentEventUuid;
+        private AtomicReference<UUID> sentEventUuid = new AtomicReference<>();
         private Reporting reporting;
 
         private ExecutorService getExecutor() {
             return executor;
         }
 
-        private UUID[] getSentEventUuid() {
-            return sentEventUuid;
+        private UUID getSentEventUuid() {
+            return sentEventUuid.get();
         }
 
         private Reporting getReporting() {
@@ -139,13 +140,13 @@ public class ResendEventTest {
 
         private TestInit invoke() throws SerializationException {
             executor = Executors.newFixedThreadPool(4);
-            sentEventUuid = new UUID[]{null};
+            sentEventUuid.set(null);
 
             //TODO: ezt a DefaultKeyNaming.ofPrefix-et nem itt kellene hívni, hanem legalábbis a CommunicationEndpoint-tól lekérni
             reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
 
             final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
-            producer.registerEventSendingCallback(frame -> sentEventUuid[0] = frame.getIdentifier());
+            producer.registerEventSendingCallback(frame -> sentEventUuid.set(frame.getIdentifier()));
             producer.start();
             producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
 

@@ -2,6 +2,8 @@ package hu.dbx.kompot.producer;
 
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 
+import java.util.Arrays;
+
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 
@@ -23,6 +25,13 @@ public interface EventGroupProvider {
      */
     static EventGroupProvider empty() {
         return marker -> emptyList();
+    }
+
+    /**
+     * Dispatches to the same values every time.
+     */
+    static EventGroupProvider constantly(String... items) {
+        return marker -> Arrays.asList(items);
     }
 
     /**

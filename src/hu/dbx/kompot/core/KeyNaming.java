@@ -17,7 +17,7 @@ public interface KeyNaming {
     String unprocessedEventsByGroupKey(String eventGroupName);
 
     /**
-     * Egy rendezett halmaz kulcsa, ami alatt ott van az épp feldolgozás alatt álló esemenyek uuid listaja.
+     * Key of a sorted set containing the event uuids that are being processed.
      *
      * @return redis key for set of processing events
      * @throws NullPointerException when eventGroupName is null or empty
@@ -25,7 +25,7 @@ public interface KeyNaming {
     String processingEventsByGroupKey(String eventGroupName);
 
     /**
-     * Egy rendezett halmaz kulcsa, ami alatt ott van a hibara futott esemenyek uuid listaja.
+     * Key of a sorted set containing the event uuids that are failed to process.
      *
      * @return redis key for set of failed event items
      * @throws NullPointerException when eventGroupName is null or empty
@@ -57,7 +57,6 @@ public interface KeyNaming {
      */
     String allEventDetailsKey();
 
-
     /**
      * Event details for a given processor come here.
      *
@@ -80,7 +79,7 @@ public interface KeyNaming {
     String methodDetailsKey(UUID methodUuid);
 
     /**
-     * A set for existing event groups
+     * A key for a set for existing event group names. Used to enumerate events.
      *
      * @throws NullPointerException when method uuid is null
      */

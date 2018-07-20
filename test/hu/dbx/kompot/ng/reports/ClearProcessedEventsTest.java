@@ -15,6 +15,7 @@ import hu.dbx.kompot.report.EventFilters;
 import hu.dbx.kompot.report.ListResult;
 import hu.dbx.kompot.report.Pagination;
 import hu.dbx.kompot.report.Reporting;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -38,10 +39,17 @@ public class ClearProcessedEventsTest {
     private static final ConsumerIdentity consumerIdentity = groupGroup(CONSUMER_CODE);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
+    private static final Pagination THOUSAND = Pagination.fromOffsetAndLimit(0, 1000);
 
     @Rule
     public TestRedis redis = TestRedis.build();
 
+    @Before
+    public void cleanup() {
+        try (Jedis jedis = redis.getJedisPool().getResource()) {
+            jedis.flushDB();
+        }
+    }
 
     /**
      * GIVEN: Küldünk 4 eseményt. Ötöt sikeresen feldolgozunk belőlük, ötöt eldobunk hibával.
@@ -55,22 +63,18 @@ public class ClearProcessedEventsTest {
         //TODO: ezt a DefaultKeyNaming.ofPrefix-et nem itt kellene hívni, hanem legalábbis a CommunicationEndpoint-tól lekérni
         final Reporting reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
 
-        //db takarítás
-        try (Jedis jedis = redis.getJedisPool().getResource()) {
-            jedis.flushDB();
-        }
-
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
         final int eventCount = 400;
 
-        for (int i = 0; i < eventCount; i++)
+        for (int i = 0; i < eventCount; i++) {
             producer.asyncSendEvent(EVENT_1, singletonMap("index", i));
+        }
 
         {
             //feldolgozás előtt álló események
-            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE, EventFilters.forStatus(DataHandling.Statuses.CREATED), Pagination.fromOffsetAndLimit(0, 1000));
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE, EventFilters.forStatus(DataHandling.Statuses.CREATED), THOUSAND);
             assertEquals(eventCount, uuids.getTotal());
         }
 
@@ -90,16 +94,12 @@ public class ClearProcessedEventsTest {
         Thread.sleep(1000);
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
-                    EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
-                    Pagination.fromOffsetAndLimit(0, 1000));
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE, EventFilters.forStatus(DataHandling.Statuses.PROCESSED), THOUSAND);
             assertEquals(eventCount / 2, uuids.getTotal());
         }
 
         {
-            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
-                    EventFilters.forStatus(DataHandling.Statuses.ERROR),
-                    Pagination.fromOffsetAndLimit(0, 1000));
+            final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE, EventFilters.forStatus(DataHandling.Statuses.ERROR), THOUSAND);
             assertEquals(eventCount / 2, uuids.getTotal());
         }
 
@@ -111,7 +111,7 @@ public class ClearProcessedEventsTest {
             // minden PROCESSED statuszu esemenyt kitakaritottunk!
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.PROCESSED),
-                    Pagination.fromOffsetAndLimit(0, 1000));
+                    THOUSAND);
             assertEquals(0, uuids.getTotal());
         }
 
@@ -119,10 +119,8 @@ public class ClearProcessedEventsTest {
         {
             final ListResult<UUID> uuids = reporting.queryEventUuids(CONSUMER_CODE,
                     EventFilters.forStatus(DataHandling.Statuses.ERROR),
-                    Pagination.fromOffsetAndLimit(0, 1000));
+                    THOUSAND);
             assertEquals(eventCount / 2, uuids.getTotal());
         }
     }
-
-
 }

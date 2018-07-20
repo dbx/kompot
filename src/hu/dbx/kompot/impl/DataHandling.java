@@ -8,6 +8,7 @@ import hu.dbx.kompot.consumer.sync.MethodDescriptorResolver;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
+import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.moby.MetaDataHolder;
@@ -66,6 +67,11 @@ public final class DataHandling {
 
         STATUS,
 
+        /**
+         * Priority if evt, either HIGH or LOW.
+         */
+        PRIORITY,
+
         ERROR_MSG
     }
 
@@ -104,6 +110,7 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, GROUPS.name(), formatGroupsString(groups));
         store.hsetnx(eventDetailsKey, SENDER.name(), clientIdentity.getIdentifier());
         store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(StreamSupport.stream(groups.spliterator(), false).count()));
+        store.hsetnx(eventDetailsKey, PRIORITY.name(), eventFrame.getEventMarker().getPriority().name());
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
 
@@ -135,19 +142,22 @@ public final class DataHandling {
      * @param eventId     melyik esemenyt akarjuk kikuldeni?
      * @param eventGroups a csoportok, akik ala bekerul az esemeny
      */
-    static void saveEventGroups(Transaction tx, KeyNaming keyNaming, UUID eventId, Iterable<String> eventGroups) {
+    static void saveEventGroups(Transaction tx, KeyNaming keyNaming, UUID eventId, Priority priority, Iterable<String> eventGroups) {
         for (String group : eventGroups) {
-            zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(group), eventId.toString());
+            zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(group), priority, eventId.toString().getBytes());
             tx.hset(keyNaming.eventDetailsKey(group, eventId), STATUS.name(), Statuses.CREATED.name());
 
             tx.sadd(keyNaming.eventGroupsKey(), group);
         }
     }
 
-    public static void zaddNow(Transaction tx, String k, String value) {
+    public static void zaddNow(Transaction tx, String sortedSetKey, Priority priority, byte[] value) {
+        long start = 1532092223L; // 2018 july
         long now = System.currentTimeMillis();
-        double weight = ((double) now / Math.log(now)) + 3;
-        tx.zadd(k, weight, value);
+
+        // TODO: test different weight functions!
+        double weight = ((double) start - now) - start * priority.score;
+        tx.zadd(sortedSetKey.getBytes(), weight, value);
     }
 
     @SuppressWarnings("unchecked")

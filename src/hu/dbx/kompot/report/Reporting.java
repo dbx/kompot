@@ -1,6 +1,7 @@
 package hu.dbx.kompot.report;
 
 import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DataHandling.Statuses;
 import hu.dbx.kompot.impl.LoggerUtils;
@@ -128,24 +129,27 @@ public final class Reporting implements EventQueries, EventUpdates {
             final int offset = pagination.getOffset();
             final int limit = pagination.getLimit();
 
+            final double max = Double.MAX_VALUE;
+            final double min = -max;
+
             if (eventStatus == null) {
-                eventUuids.addAll(jedis.zrangeByScore(keyNaming.unprocessedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
-                eventUuids.addAll(jedis.zrangeByScore(keyNaming.processingEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
-                eventUuids.addAll(jedis.zrangeByScore(keyNaming.processedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
-                eventUuids.addAll(jedis.zrangeByScore(keyNaming.failedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.unprocessedEventsByGroupKey(group), min, max, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.processingEventsByGroupKey(group), min, max, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.processedEventsByGroupKey(group), min, max, offset, limit));
+                eventUuids.addAll(jedis.zrangeByScore(keyNaming.failedEventsByGroupKey(group), min, max, offset, limit));
             } else {
                 switch (eventStatus) {
                     case CREATED:
-                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.unprocessedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.unprocessedEventsByGroupKey(group), min, max, offset, limit));
                         break;
                     case PROCESSING:
-                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.processingEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.processingEventsByGroupKey(group), min, max, offset, limit));
                         break;
                     case PROCESSED:
-                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.processedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.processedEventsByGroupKey(group), min, max, offset, limit));
                         break;
                     case ERROR:
-                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.failedEventsByGroupKey(group), Double.MIN_VALUE, Double.MAX_VALUE, offset, limit));
+                        eventUuids.addAll(jedis.zrangeByScore(keyNaming.failedEventsByGroupKey(group), min, max, offset, limit));
                         break;
                 }
             }
@@ -170,6 +174,7 @@ public final class Reporting implements EventQueries, EventUpdates {
 
             final String groupEventDataKey = keyNaming.eventDetailsKey(eventGroup, eventUuid);
             final String groupEventStatusStr = jedis.hget(groupEventDataKey, STATUS.name());
+            final Priority priority = Priority.valueOf(jedis.hget(keyNaming.eventDetailsKey(eventUuid), PRIORITY.name()));
 
             if (groupEventStatusStr == null) {
                 throw new IllegalArgumentException("Event group with uuid " + eventUuid + " and group name " + eventGroup + " does not exist");
@@ -192,7 +197,7 @@ public final class Reporting implements EventQueries, EventUpdates {
             //tranzakciót nyitok, törlöm a régi sorból, hozzáadom a CREATED sorhoz, update-elem a státuszát
             final Transaction tx = jedis.multi();
             tx.zrem(removeKey, eventUuid.toString());
-            DataHandling.zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(eventGroup), eventUuid.toString());
+            DataHandling.zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(eventGroup), priority, eventUuid.toString().getBytes());
             tx.hset(groupEventDataKey, STATUS.name(), Statuses.CREATED.name());
             tx.exec();
         }

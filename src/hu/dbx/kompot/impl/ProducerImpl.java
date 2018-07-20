@@ -9,6 +9,7 @@ import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
+import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
@@ -21,7 +22,9 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
 
-import java.util.*;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -67,6 +70,9 @@ public final class ProducerImpl implements Producer {
 
         final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData);
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
+        final Priority priority = marker.getPriority();
+
+        final String signature = eventFrame.getEventMarker().getEventName() + ":" + eventFrame.getIdentifier();
 
         try (Jedis jedis = jedisPool.getResource()) {
             Transaction transaction = jedis.multi();
@@ -74,22 +80,21 @@ public final class ProducerImpl implements Producer {
             saveEventDetails(transaction, keyNaming, eventGroups, eventFrame, getProducerIdentity());
 
             // register item in each group queue.
-            saveEventGroups(transaction, keyNaming, eventFrame.getIdentifier(), eventGroups);
+            saveEventGroups(transaction, keyNaming, eventFrame.getIdentifier(), priority, eventGroups);
 
             // publish on pubsub
-            LOGGER.trace("Publishing pubsub!");
+            LOGGER.trace("Publishing pubsub on {}", signature);
             eventGroups.forEach(group -> transaction.publish("e:" + group, eventFrame.getIdentifier().toString()));
 
             transaction.exec();
-            LOGGER.debug("Called exec!");
-
+            LOGGER.debug("Called exec on {}", signature);
         }
 
         eventSendingEventListeners.forEach(eventListener -> {
             try {
                 eventListener.onEventSent(eventFrame);
             } catch (Throwable t) {
-                LOGGER.error("Error handling eventSent event!", t);
+                LOGGER.error("Error handling eventSent event for " + signature, t);
             }
         });
     }

@@ -3,6 +3,7 @@ package hu.dbx.kompot.impl;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventStatusCallback;
 import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.events.Priority;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -10,6 +11,8 @@ import redis.clients.jedis.Transaction;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static hu.dbx.kompot.impl.DataHandling.EventKeys.PRIORITY;
 
 /**
  * Default error handling strategy.
@@ -65,18 +68,20 @@ final class DefaultCallback implements EventStatusCallback {
         final String eventGroupDetailsKey = keyNaming.eventDetailsKey(groupName, eventId);
 
         try (Jedis jedis = pool.getResource()) {
+            final Priority priority = Priority.valueOf(jedis.hget(keyNaming.eventDetailsKey(eventId), PRIORITY.name()));
+
             final Transaction multi = jedis.multi();
             multi.hset(eventGroupDetailsKey, DataHandling.EventKeys.STATUS.name(), status.name());
 
             if (status == DataHandling.Statuses.PROCESSING) {
                 multi.zrem(keyNaming.unprocessedEventsByGroupKey(groupName), eventId.toString());
-                DataHandling.zaddNow(multi, keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.zaddNow(multi, keyNaming.processingEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
             } else if (status == DataHandling.Statuses.ERROR) {
                 multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
-                DataHandling.zaddNow(multi, keyNaming.failedEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.zaddNow(multi, keyNaming.failedEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
             } else if (status == DataHandling.Statuses.PROCESSED) {
                 multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
-                DataHandling.zaddNow(multi, keyNaming.processedEventsByGroupKey(groupName), eventId.toString());
+                DataHandling.zaddNow(multi, keyNaming.processedEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
                 DataHandling.decrementUnprocessedGroupsCounter(multi, keyNaming, eventId);
             }
 
