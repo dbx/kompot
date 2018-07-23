@@ -1,10 +1,12 @@
 package hu.dbx.kompot.impl;
 
+import hu.dbx.kompot.consumer.async.EventReceivingCallback;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,13 +23,15 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
     private final ConsumerConfig consumerConfig;
     private final AtomicInteger processingEvents;
     private final ConsumerHandlers consumerHandlers;
+    private final List<EventReceivingCallback> eventReceivingCallbacks;
 
 
-    public AfterEventRunnable(ConsumerImpl consumer, ConsumerConfig consumerConfig, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers) {
+    AfterEventRunnable(ConsumerImpl consumer, ConsumerConfig consumerConfig, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
         this.consumer = consumer;
         this.consumerConfig = consumerConfig;
         this.processingEvents = processingEvents;
         this.consumerHandlers = consumerHandlers;
+        this.eventReceivingCallbacks = eventReceivingCallbacks;
     }
 
     @Override
@@ -40,7 +44,7 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
 
             if (elems != null && !elems.isEmpty()) {
                 final UUID eventUuid = UUID.fromString(elems.iterator().next());
-                return new EventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventUuid);
+                return new EventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks);
             }
         } catch (Throwable t) {
             LOGGER.error("Error on automatic event processing: ", t);

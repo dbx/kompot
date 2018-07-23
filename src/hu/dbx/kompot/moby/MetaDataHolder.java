@@ -1,13 +1,10 @@
 package hu.dbx.kompot.moby;
 
-//TODO: ez egy nagyon moby specifikus megoldás, esetleg ki lehetne cserélni valami általánosabb implementációra
-public class MetaDataHolder {
+public final class MetaDataHolder {
 
     public enum MetaDataFields {
-
         CORRELATION_ID,
         USER_REF
-
     }
 
     private final String correlationId;

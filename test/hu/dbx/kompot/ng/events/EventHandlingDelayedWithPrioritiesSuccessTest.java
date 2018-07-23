@@ -60,6 +60,8 @@ public class EventHandlingDelayedWithPrioritiesSuccessTest {
         executor.awaitTermination(3, TimeUnit.SECONDS);
 
         assertEquals(20, counter.size());
+
+        // jo, itt nem lehet elvarni, hogy pont sorban fognak megerkezni. de az elso-utolso stimmeljen!
         assertArrayEquals(new Object[]{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, counter.toArray());
 
         producer.stop();

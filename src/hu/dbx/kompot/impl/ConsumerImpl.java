@@ -2,6 +2,7 @@ package hu.dbx.kompot.impl;
 
 import hu.dbx.kompot.consumer.Consumer;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
+import hu.dbx.kompot.consumer.async.EventReceivingCallback;
 import hu.dbx.kompot.consumer.async.handler.EventProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastProcessorFactory;
@@ -19,6 +20,7 @@ import redis.clients.jedis.JedisPubSub;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -34,12 +36,18 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
     /**
      * Number of event processors in progress.
+     * <p>
+     * We use this counter to separate the thread pool to two parts:
+     * one for event handling and one for methods + broadcasts.
      */
     private final AtomicInteger processingEvents = new AtomicInteger(0);
+
     private final ConsumerHandlers consumerHandlers;
     private final ConsumerConfig consumerConfig;
 
-    private final List<MethodReceivingCallback> methodEventListeners = Collections.synchronizedList(new LinkedList<>());
+    // TODO: maybe put these two into ConsumerHandlers?
+    private final List<MethodReceivingCallback> methodEventListeners = new CopyOnWriteArrayList<>();
+    private final List<EventReceivingCallback> eventReceivingCallbacks = new CopyOnWriteArrayList<>();
 
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
@@ -107,7 +115,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         startLatch.await();
 
         // we start processing earlier events.
-        consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers)));
+        consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
     }
 
     public void shutdown() {
@@ -224,7 +232,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
             throw new IllegalArgumentException("can not start processing event will null uuid!");
         } else if (processingEvents.incrementAndGet() < MAX_EVENTS) {
             try {
-                consumerConfig.getExecutor().execute(new TrampolineRunner(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid)));
+                consumerConfig.getExecutor().execute(new TrampolineRunner(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks)));
             } catch (RejectedExecutionException e) {
                 LOGGER.debug("Could not execute event of id {}", eventUuid);
                 processingEvents.decrementAndGet();
@@ -256,11 +264,11 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
-    public void addMethodReceivingCallback(MethodReceivingCallback listener) {
-        if (listener == null) {
-            throw new IllegalArgumentException("Method evt listener must not be null!");
+    public void addMethodReceivingCallback(MethodReceivingCallback callback) {
+        if (callback == null) {
+            throw new IllegalArgumentException("Method evt callback must not be null!");
         } else {
-            methodEventListeners.add(listener);
+            methodEventListeners.add(callback);
         }
     }
 
@@ -270,6 +278,22 @@ public final class ConsumerImpl implements Consumer, Runnable {
             throw new IllegalArgumentException("Method sending event listener must not be null!");
         } else {
             methodEventListeners.remove(listener);
+        }
+    }
+
+    public void addEventReceivingCallback(EventReceivingCallback callback) {
+        if (callback == null) {
+            throw new IllegalArgumentException("Event receiving callback must not be null!");
+        } else {
+            eventReceivingCallbacks.add(callback);
+        }
+    }
+
+    public void removeEventReceivingCallback(EventReceivingCallback callback) {
+        if (callback == null) {
+            throw new IllegalArgumentException("Event receiving callback must not be null!");
+        } else {
+            eventReceivingCallbacks.remove(callback);
         }
     }
 }
