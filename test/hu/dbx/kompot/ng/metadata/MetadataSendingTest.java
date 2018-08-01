@@ -23,6 +23,7 @@ import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class MetadataSendingTest {
 
@@ -54,13 +55,14 @@ public class MetadataSendingTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0), MetaDataHolder.build("corri", "usrR"));
+        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0), MetaDataHolder.build("corri", "usrR", 42L));
 
         Thread.sleep(1000);
 
         assertNotNull(outputMeta.get());
         assertEquals("corri", outputMeta.get().getCorrelationId());
         assertEquals("usrR", outputMeta.get().getUserRef());
+        assertEquals(42L, (long) outputMeta.get().getBatchId());
 
         producer.stop();
         consumer.stop();
@@ -91,13 +93,14 @@ public class MetadataSendingTest {
         consumer.start();
 
         Thread.sleep(1000);
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11), MetaDataHolder.build("xxx", "yyy"));
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11), MetaDataHolder.build("xxx", "yyy", null));
 
         assertEquals(1, response.get(3, TimeUnit.SECONDS).get("a"));
 
         assertNotNull(outputMeta.get());
         assertEquals("xxx", outputMeta.get().getCorrelationId());
         assertEquals("yyy", outputMeta.get().getUserRef());
+        assertNull(outputMeta.get().getBatchId());
 
 
         producer.stop();

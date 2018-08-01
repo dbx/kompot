@@ -237,13 +237,20 @@ public final class DataHandling {
             if (metaData.getUserRef() != null) {
                 store.hset(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name(), metaData.getUserRef());
             }
+            if (metaData.getBatchId() != null) {
+                store.hsetnx(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name(), metaData.getBatchId().toString());
+            }
         }
     }
 
     private static MetaDataHolder readMetaData(Jedis jedis, String detailsKey) {
         final String corrId = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.CORRELATION_ID.name());
         final String userRef = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name());
-        return MetaDataHolder.build(corrId, userRef);
+        final String batchIdStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name());
+        if (batchIdStr != null) {
+            return MetaDataHolder.build(corrId, userRef, Long.valueOf(batchIdStr));
+        } else {
+            return MetaDataHolder.build(corrId, userRef, null);
+        }
     }
-
 }
