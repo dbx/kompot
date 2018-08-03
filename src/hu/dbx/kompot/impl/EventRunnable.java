@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 // csokkenti a folyamatban levo eventek szamat.
 final class EventRunnable implements ConsumerImpl.Trampoline {
-    private ConsumerImpl consumer;
+    private final ConsumerImpl consumer;
     private final ConsumerConfig consumerConfig;
     private final AtomicInteger processingEvents;
     private final ConsumerHandlers consumerHandlers;

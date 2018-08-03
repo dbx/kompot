@@ -22,10 +22,5 @@ public interface EventDescriptorResolver {
     /**
      * Always resolves to a simple event.
      */
-    public static final EventDescriptorResolver DEFAULT = new EventDescriptorResolver() {
-        @Override
-        public Optional<EventDescriptor> resolveMarker(String eventName) {
-            return Optional.of(EventDescriptor.of(eventName, Map.class));
-        }
-    };
+    EventDescriptorResolver DEFAULT = eventName -> Optional.of(EventDescriptor.of(eventName, Map.class));
 }

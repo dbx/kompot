@@ -11,7 +11,7 @@ import java.util.function.Function;
 
 public final class DefaultMethodProcessorAdapter implements MethodDescriptorResolver {
 
-    private Set<SelfDescribingMethodProcessor> processors = new HashSet<>();
+    private final Set<SelfDescribingMethodProcessor> processors = new HashSet<>();
 
     public <TReq, TRes> TRes call(MethodDescriptor<TReq, TRes> marker, TReq request, MetaDataHolder meta) {
         final Optional<SelfDescribingMethodProcessor> p = processors.stream().filter(x -> x.getMethodMarker().equals(marker)).findAny();

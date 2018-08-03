@@ -17,7 +17,7 @@ final class MethodRunnable implements Runnable {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private ConsumerImpl consumer;
+    private final ConsumerImpl consumer;
     private final UUID methodUuid;
     private final ConsumerConfig consumerConfig;
     private final List<MethodReceivingCallback> methodEventListeners;

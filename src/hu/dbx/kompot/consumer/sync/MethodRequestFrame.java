@@ -1,14 +1,8 @@
 package hu.dbx.kompot.consumer.sync;
 
-import hu.dbx.kompot.core.KeyNaming;
-import hu.dbx.kompot.core.SerializeHelper;
-import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.ProducerIdentity;
-import redis.clients.jedis.Jedis;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 public final class MethodRequestFrame<Req> {
@@ -31,7 +25,7 @@ public final class MethodRequestFrame<Req> {
     /**
      * Meta data
      */
-    private MetaDataHolder metaData;
+    private final MetaDataHolder metaData;
 
 
     /**
@@ -76,22 +70,4 @@ public final class MethodRequestFrame<Req> {
     public MetaDataHolder getMetaData() {
         return metaData;
     }
-
-    private static final String DATA = "data", CREATION = "created", ORIGIN = "producer", TIMEOUT = "timeout", METHOD = "method";
-
-//    public MethodRequestFrame read(UUID messageIdentifier, KeyNaming naming, Jedis jedis, MethodDescriptorResolver resolver) throws DeserializationException {
-//        final String outerKey = "m:" + messageIdentifier.toString();
-//        final String[] keys = {DATA, ORIGIN, METHOD, CREATION};
-//        final List<String> items = jedis.hmget(outerKey, keys);
-//        final String data = items.get(0), originId = items.get(1), method = items.get(2);
-//        final Optional<MethodDescriptor> marker = resolver.resolveMarker(method);
-//
-//        if (!marker.isPresent())
-//            throw new IllegalStateException("Could not resolve marker for method " + method);
-//
-//        final Object dataObject = SerializeHelper.deserializeRequest(method, data, resolver);
-//
-//        //noinspection unchecked
-//        return new MethodRequestFrame(messageIdentifier, marker.get(), dataObject, originId);
-//    }
 }

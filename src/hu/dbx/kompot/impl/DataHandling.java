@@ -85,8 +85,6 @@ public final class DataHandling {
 
     public enum EventPriority {HI, LO}
 
-    ;
-
     /**
      * Persists event details object.
      *

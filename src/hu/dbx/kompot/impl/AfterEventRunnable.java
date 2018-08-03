@@ -19,7 +19,7 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private ConsumerImpl consumer;
+    private final ConsumerImpl consumer;
     private final ConsumerConfig consumerConfig;
     private final AtomicInteger processingEvents;
     private final ConsumerHandlers consumerHandlers;

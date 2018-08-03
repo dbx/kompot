@@ -160,7 +160,7 @@ public final class Reporting implements EventQueries, EventUpdates {
     }
 
 
-    private static List<Statuses> resendableStatuses = Arrays.asList(Statuses.ERROR, Statuses.PROCESSING);
+    private final static List<Statuses> resendableStatuses = Arrays.asList(Statuses.ERROR, Statuses.PROCESSING);
 
     @Override
     public void resendEvent(UUID eventUuid, String eventGroup) {

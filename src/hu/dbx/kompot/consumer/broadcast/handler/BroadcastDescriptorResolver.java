@@ -1,7 +1,6 @@
 package hu.dbx.kompot.consumer.broadcast.handler;
 
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * Used to find EventDescriptor when deserializing.

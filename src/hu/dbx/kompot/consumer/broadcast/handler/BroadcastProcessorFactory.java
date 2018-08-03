@@ -10,9 +10,6 @@ public interface BroadcastProcessorFactory {
 
     /**
      * Returns a broadcast processor when found for the given broadcast descriptor.
-     * @param descriptor
-     * @param <TReq>
-     * @return
      */
     <TReq> Optional<SelfDescribingBroadcastProcessor<TReq>> create(BroadcastDescriptor<TReq> descriptor);
 

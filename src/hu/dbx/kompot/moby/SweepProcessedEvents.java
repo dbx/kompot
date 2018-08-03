@@ -14,5 +14,4 @@ public final class SweepProcessedEvents {
         return null;
     }
 
-
 }
