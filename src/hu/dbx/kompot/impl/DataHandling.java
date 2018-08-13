@@ -18,10 +18,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.StreamSupport;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
@@ -123,7 +120,11 @@ public final class DataHandling {
     }
 
     public static Collection<String> parseGroupsString(String groups) {
-        return Arrays.asList(groups.split(GROUP_SEPARATOR_CHAR));
+        if (groups == null || groups.isEmpty()) {
+            return Collections.emptyList();
+        } else {
+            return Arrays.asList(groups.split(GROUP_SEPARATOR_CHAR));
+        }
     }
 
     public static void decrementUnprocessedGroupsCounter(Transaction store, KeyNaming keyNaming, UUID eventDataUuid) {
