@@ -107,8 +107,10 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(LocalDateTime.now()));
         store.hsetnx(eventDetailsKey, GROUPS.name(), formatGroupsString(groups));
         store.hsetnx(eventDetailsKey, SENDER.name(), clientIdentity.getIdentifier());
-        store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(StreamSupport.stream(groups.spliterator(), false).count()));
         store.hsetnx(eventDetailsKey, PRIORITY.name(), eventFrame.getEventMarker().getPriority().name());
+
+        long groupCount = StreamSupport.stream(groups.spliterator(), false).count();
+        store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(groupCount));
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
 
@@ -211,6 +213,7 @@ public final class DataHandling {
         final String methodDetailsKey = keyNaming.methodDetailsKey(methodUuid);
         final String methodName = jedis.hget(methodDetailsKey, CODE.name());
         if (methodName == null) {
+            LOGGER.warn("Missing method name under key {}", methodDetailsKey);
             return Optional.empty();
         }
 
@@ -218,7 +221,10 @@ public final class DataHandling {
         final String sender = jedis.hget(methodDetailsKey, SENDER.name());
 
         final Optional<MethodDescriptor> descriptor = resolver.resolveMarker(methodName);
-        if (!descriptor.isPresent()) return Optional.empty();
+        if (!descriptor.isPresent()) {
+            LOGGER.warn("Could not resolve method descriptor for {}", methodName);
+            return Optional.empty();
+        }
 
         final Object requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
         final MetaDataHolder methodMeta = readMetaData(jedis, methodDetailsKey);

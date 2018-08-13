@@ -1,5 +1,6 @@
 package hu.dbx.kompot.impl;
 
+import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.core.SerializeHelper;
@@ -63,8 +64,9 @@ final class MethodRunnable implements Runnable {
 
                 frame = frameOp.get();
                 final MethodRequestFrame mrf = frame;
+                final MethodDescriptor methodMarker = frame.getMethodMarker();
 
-                store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(frame.getMethodMarker().getMethodGroupName()), frame.getIdentifier().toString());
+                store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(methodMarker.getMethodGroupName()), frame.getIdentifier().toString());
                 // esemenykezelok futtatasa
                 methodEventListeners.forEach(x -> {
                     try {
@@ -73,14 +75,13 @@ final class MethodRunnable implements Runnable {
                         LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
                     }
                 });
-
-                LOGGER.debug("Calling method processor");
+                LOGGER.debug("Calling method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
                 // siker eseten visszairjuk a sikeres vackot
 
                 // TODO: irjuk be a folyamatban levo esemenyes soraba!
                 //noinspection unchecked
-                final Object response = consumer.getMethodProcessorAdapter().call(frame.getMethodMarker(), frame.getMethodData(), frame.getMetaData());
-                LOGGER.debug("Called method processor");
+                final Object response = consumer.getMethodProcessorAdapter().call(methodMarker, frame.getMethodData(), frame.getMetaData());
+                LOGGER.debug("Called method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
 
                 // TODO: use multi/exec here to writre statuses and stuff.
                 store.hset(methodKey, DataHandling.MethodResponseKeys.RESPONSE.name(), SerializeHelper.serializeObject(response));
@@ -91,14 +92,14 @@ final class MethodRunnable implements Runnable {
                     try {
                         x.onRequestProcessedSuccessfully(mrf, response);
                     } catch (Throwable t) {
-                        LOGGER.error("Error when running method sending event listener for {}", t);
+                        LOGGER.error("Error when running method sending event listener.", t);
                     }
                 });
 
-                LOGGER.debug("Written response stuff");
+                LOGGER.debug("Written response to method {}/{} to {}",
+                        methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
             } catch (Throwable t) {
-                // TODO: irjuk be a hibas esemenyek soraba!
-
+                LOGGER.debug("Exception happened, writing failure.");
                 writeMethodFailure(store, methodKey, t);
 
                 if (frame != null) {
@@ -112,13 +113,12 @@ final class MethodRunnable implements Runnable {
                         }
                     });
                 }
-
             } finally {
                 // hogy nehogy lejarjon mire megjon a valasz!
                 store.expire(methodKey, 15);
 
                 String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
-                LOGGER.debug("Notifying responging staff on {}", responseNotificationChannel);
+                LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
 
                 store.publish(responseNotificationChannel, methodUuid.toString());
             }
