@@ -70,4 +70,8 @@ public final class MethodRequestFrame<Req> {
     public MetaDataHolder getMetaData() {
         return metaData;
     }
+
+    public String debugSignature() {
+        return getMethodMarker().getMethodGroupName() + "." + getMethodMarker().getMethodName() + "@" + getIdentifier();
+    }
 }

@@ -95,4 +95,8 @@ public class EventFrame<Req> {
                 ", identifier='" + identifier + '\'' +
                 '}';
     }
+
+    public String debugSignature() {
+        return getEventMarker().getEventName() + "@" + getIdentifier();
+    }
 }

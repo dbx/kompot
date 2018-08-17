@@ -65,14 +65,12 @@ public final class ProducerImpl implements Producer {
         if (null == marker) {
             throw new NullPointerException("Event marker is null!");
         } else if (null == request) {
-            throw new NullPointerException("Request object is null for marker: " + marker);
+            throw new NullPointerException("Request object is null for marker of: " + marker.getEventName());
         }
 
         final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData);
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
         final Priority priority = marker.getPriority();
-
-        final String signature = eventFrame.getEventMarker().getEventName() + ":" + eventFrame.getIdentifier();
 
         try (Jedis jedis = jedisPool.getResource()) {
             Transaction transaction = jedis.multi();
@@ -83,18 +81,18 @@ public final class ProducerImpl implements Producer {
             saveEventGroups(transaction, keyNaming, eventFrame.getIdentifier(), priority, eventGroups);
 
             // publish on pubsub
-            LOGGER.trace("Publishing pubsub on {}", signature);
+            LOGGER.trace("Publishing pubsub on {}", eventFrame.debugSignature());
             eventGroups.forEach(group -> transaction.publish("e:" + group, eventFrame.getIdentifier().toString()));
 
             transaction.exec();
-            LOGGER.debug("Called exec on {}", signature);
+            LOGGER.debug("Called exec on {}", eventFrame.debugSignature());
         }
 
         eventSendingEventListeners.forEach(eventListener -> {
             try {
                 eventListener.onEventSent(eventFrame);
             } catch (Throwable t) {
-                LOGGER.error("Error handling eventSent event for " + signature, t);
+                LOGGER.error("Exception when handling onEventSent event for " + eventFrame.debugSignature(), t);
             }
         });
     }
@@ -119,9 +117,8 @@ public final class ProducerImpl implements Producer {
 
         final CompletableFuture<TRes> responseFuture = new CompletableFuture<>();
 
-        try (Jedis jedis = jedisPool.getResource()) {
-
-            Transaction transaction = jedis.multi();
+        try (final Jedis jedis = jedisPool.getResource()) {
+            final Transaction transaction = jedis.multi();
 
             // bementjuk a memoriaba
             writeMethodFrame(transaction, keyNaming, requestFrame);
@@ -136,7 +133,7 @@ public final class ProducerImpl implements Producer {
             scheduleMethodTimeout(requestFrame, responseFuture, marker.getTimeout());
 
             // megszolitjuk a cel modult
-            String channel = "m:" + methodGroup;
+            final String channel = "m:" + methodGroup;
             transaction.publish(channel, requestFrame.getIdentifier().toString());
             LOGGER.trace("Published on channel {}", channel);
 
@@ -147,7 +144,7 @@ public final class ProducerImpl implements Producer {
             try {
                 methodEventListener.onRequestSent(requestFrame);
             } catch (Throwable t) {
-                LOGGER.error("Error handling requestSent event!", t);
+                LOGGER.error("Exception when handling onRequestSent callback of " + requestFrame.debugSignature(), t);
             }
         });
 
@@ -159,18 +156,17 @@ public final class ProducerImpl implements Producer {
      */
     private <TReq, TRes> void scheduleMethodTimeout(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> responseFuture, long timeoutMs) {
         methodTimeoutExecutor.schedule(() -> {
-                    if (!responseFuture.isCancelled() && !responseFuture.isCompletedExceptionally() && !responseFuture.isDone()) {
-                        methodEventListeners.forEach(methodEventListener -> {
-                            try {
-                                methodEventListener.onTimeOut(requestFrame);
-                            } catch (Throwable t) {
-                                LOGGER.error("Error handling requestSent event!", t);
-                            }
-                        });
-                        responseFuture.cancel(false);
+            if (!responseFuture.isCancelled() && !responseFuture.isCompletedExceptionally() && !responseFuture.isDone()) {
+                methodEventListeners.forEach(methodEventListener -> {
+                    try {
+                        methodEventListener.onTimeOut(requestFrame);
+                    } catch (Throwable t) {
+                        LOGGER.error("Exception when handling onTimeOut callback of " + requestFrame.debugSignature(), t);
                     }
-                }
-                , timeoutMs, TimeUnit.MILLISECONDS);
+                });
+                responseFuture.cancel(false);
+            }
+        }, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
     private <TReq, TRes> void messageCallback(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
@@ -184,7 +180,9 @@ public final class ProducerImpl implements Producer {
                     methodProcessed(keyNaming, requestFrame, response, jedis);
                     break;
                 case PROCESSING:
-                    throw new IllegalStateException("The event should not be in PROCESSED state");
+                    // itt mar vissza kellett legyen irva az esemeny feldolgozottsaganak allapota
+                    final String msg = "The event should not be in PROCESSING state! frame=" + requestFrame.debugSignature();
+                    throw new IllegalStateException(msg);
             }
         } catch (DeserializationException e) {
             response.completeExceptionally(e);
@@ -218,7 +216,7 @@ public final class ProducerImpl implements Producer {
             try {
                 methodEventListener.onErrorReceived(requestFrame, exception);
             } catch (Throwable t) {
-                LOGGER.error("Error handling requestSent event!", t);
+                LOGGER.error("Error handling onErrorReceived callback of " + requestFrame.debugSignature(), t);
             }
         });
     }
@@ -226,7 +224,10 @@ public final class ProducerImpl implements Producer {
     /**
      * Kezel egy feldolgozott statuszura allitott metodust
      */
-    private <TReq, TRes> void methodProcessed(KeyNaming keyNaming, MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response, Jedis jedis) throws DeserializationException {
+    private <TReq, TRes> void methodProcessed(KeyNaming keyNaming,
+                                              MethodRequestFrame<TReq> requestFrame,
+                                              CompletableFuture<TRes> response,
+                                              Jedis jedis) throws DeserializationException {
         final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
         final String data = jedis.hget(methodDetailsKey, RESPONSE.name());
 
@@ -275,13 +276,14 @@ public final class ProducerImpl implements Producer {
     }
 
     @Override
-    public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor, TReq broadcastData) throws SerializationException {
+    public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor,
+                                 TReq broadcastData) throws SerializationException {
         try (Jedis jedis = jedisPool.getResource()) {
-            String serializedData = SerializeHelper.serializeObject(broadcastData);
-            String channel = "b:" + descriptor.getBroadcastCode();
-            LOGGER.info(getProducerIdentity().getIdentifier() + "Broadcasting on channel" + channel);
+            final String serializedData = SerializeHelper.serializeObject(broadcastData);
+            final String channel = "b:" + descriptor.getBroadcastCode();
+            LOGGER.trace(getProducerIdentity().getIdentifier() + "Broadcasting on channel" + channel);
             jedis.publish(channel, serializedData);
-            LOGGER.info(getProducerIdentity().getIdentifier() + "Did broadcast!");
+            LOGGER.trace(getProducerIdentity().getIdentifier() + "Did broadcast on channel " + channel);
         }
     }
 

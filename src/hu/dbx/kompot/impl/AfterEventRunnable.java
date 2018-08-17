@@ -12,8 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Run it after every events.
- * Looks for events in the pool. Tries to
+ * Minden esemeny feldolgozasa uta lefut es korulnez az esemenyek kozott, mit tudna meg feldolgozni.
  */
 final class AfterEventRunnable implements ConsumerImpl.Trampoline {
 
@@ -24,7 +23,6 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
     private final AtomicInteger processingEvents;
     private final ConsumerHandlers consumerHandlers;
     private final List<EventReceivingCallback> eventReceivingCallbacks;
-
 
     AfterEventRunnable(ConsumerImpl consumer, ConsumerConfig consumerConfig, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
         this.consumer = consumer;
