@@ -50,6 +50,10 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
 
                 if (result == 0) {
                     LOGGER.trace("Some other instance of {} has already gathered evt {}", groupCode, eventUuid);
+
+                    // we remove event here also, so that if the db gents inconsistent then we do not loop on the same value.
+                    store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
+
                     return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
                 } else {
                     // itt a versenyhelyzet elkerulese miatt remove van. ha ezt kiszedjuk, megnonek a logok.
@@ -77,9 +81,12 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
             consumer.getEventProcessorAdapter().handle(frame.getEventMarker(), frame.getMetaData(), frame.getEventData(), callback);
 
             LOGGER.debug("Processed event uuid={}", eventUuid);
-            consumerConfig.getExecutor().execute(new ConsumerImpl.TrampolineRunner(new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
 
-            // TODO: itt neki kellene allni feldolgozni mas, beragadt esemenyeket is.
+            // itt elkezdjuk feldolgozni a korabban beragadt esemenyeket is, ha vannak.
+            consumerConfig.getExecutor().execute(new ConsumerImpl.TrampolineRunner(new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
+        } catch (Throwable t) {
+            LOGGER.error("Error during handing event=" + eventUuid);
+            throw t;
         } finally {
             processingEvents.decrementAndGet();
         }

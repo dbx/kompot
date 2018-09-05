@@ -46,6 +46,7 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
             }
         } catch (Throwable t) {
             LOGGER.error("Error on automatic event processing: ", t);
+            throw t;
         }
         return null;
     }

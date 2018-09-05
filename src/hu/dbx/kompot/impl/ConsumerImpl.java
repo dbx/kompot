@@ -216,6 +216,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 }
             } catch (DeserializationException e) {
                 LOGGER.error("Could not deserialize broadcast payload for code {} and data {}", broadcastCode, data);
+            } catch (Throwable t) {
+                LOGGER.error("Error handling broadcast code=" + broadcastCode + " data=" + data, t);
             }
         }
     }
@@ -258,8 +260,12 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
         @Override
         public void run() {
-            while (trampoline != null) {
-                trampoline = trampoline.jump();
+            try {
+                while (trampoline != null) {
+                    trampoline = trampoline.jump();
+                }
+            } catch (Throwable t) {
+                LOGGER.error("Error on trampoline=" + trampoline, t);
             }
         }
     }
