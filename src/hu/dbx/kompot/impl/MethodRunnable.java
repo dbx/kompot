@@ -99,7 +99,7 @@ final class MethodRunnable implements Runnable {
                 LOGGER.debug("Written response to method {}/{} to {}",
                         methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
             } catch (Throwable t) {
-                LOGGER.debug("Exception happened, writing failure.");
+                LOGGER.error("Exception happened when sending method " + methodUuid, t);
                 writeMethodFailure(store, methodKey, t);
 
                 if (frame != null) {
