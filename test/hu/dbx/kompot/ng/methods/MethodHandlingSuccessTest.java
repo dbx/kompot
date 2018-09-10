@@ -36,7 +36,7 @@ public class MethodHandlingSuccessTest {
      * Valaszolunk a metodus hivasra
      */
     @Test
-    public void testSuccessfullyHandleEvent() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
+    public void testSuccessfullyHandleMethod() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), MethodHandlingSuccessTest.producerIdentity, executor);

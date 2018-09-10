@@ -245,6 +245,9 @@ public final class DataHandling {
             if (metaData.getBatchId() != null) {
                 store.hsetnx(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name(), metaData.getBatchId().toString());
             }
+            if (metaData.getFeedbackUuid() != null) {
+                store.hsetnx(detailsKey, MetaDataHolder.MetaDataFields.FEEDBACK_UUID.name(), metaData.getFeedbackUuid().toString());
+            }
         }
     }
 
@@ -252,10 +255,18 @@ public final class DataHandling {
         final String corrId = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.CORRELATION_ID.name());
         final String userRef = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name());
         final String batchIdStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name());
-        if (batchIdStr != null) {
-            return MetaDataHolder.build(corrId, userRef, Long.valueOf(batchIdStr));
-        } else {
-            return MetaDataHolder.build(corrId, userRef, null);
+        final String feedbackUuidStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.FEEDBACK_UUID.name());
+
+        MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, null);
+
+        if (batchIdStr != null && !feedbackUuidStr.trim().isEmpty()) {
+            meta = meta.withBatchId(Long.valueOf(batchIdStr));
         }
+
+        if (feedbackUuidStr != null && !feedbackUuidStr.trim().isEmpty()) {
+            meta = meta.withFeedbackUuid(UUID.fromString(feedbackUuidStr.trim()));
+        }
+
+        return meta;
     }
 }

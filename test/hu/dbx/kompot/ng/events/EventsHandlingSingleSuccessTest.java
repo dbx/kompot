@@ -30,9 +30,11 @@ import static org.junit.Assert.assertNotEquals;
 public class EventsHandlingSingleSuccessTest {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1");
-    private static final ConsumerIdentity producerIdentity = groupGroup("UNUSED");
+    private static final String EVENT_CODE = "EVENT1" + EventsHandlingSingleSuccessTest.class.getName();
+
+    private static final EventDescriptor EVENT_1 = EventDescriptor.of(EVENT_CODE, Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1" + EventsHandlingSingleSuccessTest.class.getName());
+    private static final ConsumerIdentity producerIdentity = groupGroup("UNUSED" + EventsHandlingSingleSuccessTest.class.getName());
 
     @Rule
     public TestRedis redis = TestRedis.build();
