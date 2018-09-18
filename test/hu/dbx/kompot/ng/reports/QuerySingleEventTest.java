@@ -30,8 +30,10 @@ import static org.junit.Assert.*;
 
 public class QuerySingleEventTest {
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1");
+    private static final String EVENT_NAME = "TEST_EVENT_" + QuerySingleEventTest.class.getName();
+
+    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of(EVENT_NAME, Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup(EVENT_NAME);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
     @Rule
@@ -64,7 +66,7 @@ public class QuerySingleEventTest {
         //db takarítás
 //        redis.getJedisPool().getResource().flushDB();
 
-        final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid[0]);
+        final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent(EVENT_1.getEventName(), sentEventUuid[0]);
 
         assertTrue(eventGroupDataOpt.isPresent());
         assertEquals(DataHandling.Statuses.CREATED, eventGroupDataOpt.get().getStatus());
@@ -74,8 +76,8 @@ public class QuerySingleEventTest {
         assertNotNull(eventData.getFirstSent());
         assertNotNull(eventData.getSender());
         assertNotNull(eventData.getUuid());
-        assertEquals("EVENT1", eventData.getEventType());
-        assertEquals("EVENT1", eventData.getGroups());
+        assertEquals(EVENT_1.getEventName(), eventData.getEventType());
+        assertEquals(EVENT_1.getEventName(), eventData.getGroups());
     }
 
     /**
@@ -99,7 +101,7 @@ public class QuerySingleEventTest {
 
         {
             //az esemény feldolgozás előtt van
-            final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid.get());
+            final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent(EVENT_1.getEventName(), sentEventUuid.get());
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.CREATED, eventGroupDataOpt.get().getStatus());
         }
@@ -108,7 +110,7 @@ public class QuerySingleEventTest {
         consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> {
 
             //az esemény feldolgozás alatt van
-            final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid.get());
+            final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent(EVENT_1.getEventName(), sentEventUuid.get());
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.PROCESSING, eventGroupDataOpt.get().getStatus());
 
@@ -120,7 +122,7 @@ public class QuerySingleEventTest {
 
         {
             //az esemény feldolgozás után van
-            final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent("EVENT1", sentEventUuid.get());
+            final Optional<EventGroupData> eventGroupDataOpt = reporting.querySingleEvent(EVENT_1.getEventName(), sentEventUuid.get());
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.PROCESSED, eventGroupDataOpt.get().getStatus());
         }

@@ -161,6 +161,17 @@ public final class DataHandling {
         tx.zadd(sortedSetKey.getBytes(), weight, value);
     }
 
+    /**
+     * Reads event data from redis by uuid.
+     *
+     * @param jedis db connection
+     * @param keyNaming used to get keys used in this redis instance.
+     * @param eventResolver used to find event descriptor
+     * @param eventUuid event identifier
+     * @return read frame - not null
+     * @throws DeserializationException on deserialization error
+     * @throws IllegalArgumentException when no event descriptor is found for evt type.
+     */
     @SuppressWarnings("unchecked")
     static EventFrame readEventFrame(Jedis jedis, KeyNaming keyNaming, EventDescriptorResolver eventResolver, UUID eventUuid) throws DeserializationException {
         final String eventDetailsKey = keyNaming.eventDetailsKey(eventUuid);
@@ -170,6 +181,7 @@ public final class DataHandling {
         final String eventName = jedis.hget(eventDetailsKey, CODE.name());
         final String eventData = jedis.hget(eventDetailsKey, DATA.name());
 
+        // this call might throw IllegalArgumentException
         final Object eventDataObj = SerializeHelper.deserializeContentOnly(eventName, eventData, eventResolver);
         final Optional<EventDescriptor> eventMarker = eventResolver.resolveMarker(eventName);
 

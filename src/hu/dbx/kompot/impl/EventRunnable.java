@@ -58,7 +58,17 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
                 } else {
                     // itt a versenyhelyzet elkerulese miatt remove van. ha ezt kiszedjuk, megnonek a logok.
                     store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
-                    frame = DataHandling.readEventFrame(store, consumer.getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
+
+                    try {
+                        frame = DataHandling.readEventFrame(store, consumer.getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
+                    } catch (IllegalArgumentException e) {
+                        // happens when event resolver did not find event descriptor for event code.
+                        // this case we just write an error and skip it.
+                        LOGGER.error(e.getMessage() + ", event-uuid=" + eventUuid);
+                        callback.error(e);
+                        return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
+                    }
+
                     callback.setFrame(frame);
                 }
             } catch (DeserializationException e) {

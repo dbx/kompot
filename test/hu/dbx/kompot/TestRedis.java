@@ -44,6 +44,7 @@ public class TestRedis extends ExternalResource {
 
     @Override
     public void after() {
+        pool.close();
 //        redisServer.stop();
     }
 
