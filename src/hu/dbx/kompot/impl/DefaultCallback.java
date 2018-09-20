@@ -102,7 +102,15 @@ final class DefaultCallback implements EventStatusCallback {
         final String eventGroupDetailsKey = keyNaming.eventDetailsKey(groupName, eventId);
 
         try (Jedis jedis = pool.getResource()) {
-            final Priority priority = Priority.valueOf(jedis.hget(keyNaming.eventDetailsKey(eventId), PRIORITY.name()));
+            final String priorityValue = jedis.hget(keyNaming.eventDetailsKey(eventId), PRIORITY.name());
+
+            if (priorityValue == null) {
+                // unknown case. can not write error status because event details are is missing.
+                LOGGER.error("Could not write status {} for eventId={}/{}", status, eventId, consumerIdentity.getEventGroup());
+                return;
+            }
+
+            final Priority priority = Priority.valueOf(priorityValue);
 
             final Transaction multi = jedis.multi();
             multi.hset(eventGroupDetailsKey, DataHandling.EventKeys.STATUS.name(), status.name());
