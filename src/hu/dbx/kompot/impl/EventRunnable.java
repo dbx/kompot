@@ -61,15 +61,22 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
 
                     try {
                         frame = DataHandling.readEventFrame(store, consumer.getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
+                        callback.setFrame(frame);
                     } catch (IllegalArgumentException e) {
-                        // happens when event resolver did not find event descriptor for event code.
-                        // this case we just write an error and skip it.
+                        // did not find event details under kiven key in db
                         LOGGER.error(e.getMessage() + ", event-uuid=" + eventUuid);
-                        callback.error(e);
+                        // we do not persist error to db because event uuid likely does not exist is redis.
+                        return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
+                    } catch (IllegalStateException e) {
+                        // could not find marker for given event code
+                        LOGGER.error(e.getMessage() + ", event-uuid=" + eventUuid);
+                        try {
+                            callback.error(e);
+                        } catch (RuntimeException ee) {
+                            LOGGER.error("Could not write error state back to redis, eventUuid=" + eventUuid, e);
+                        }
                         return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
                     }
-
-                    callback.setFrame(frame);
                 }
             } catch (DeserializationException e) {
                 LOGGER.error("Could not deserialize event data", e);
