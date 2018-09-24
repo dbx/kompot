@@ -276,7 +276,7 @@ public final class DataHandling {
 
         MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, null);
 
-        if (batchIdStr != null && !feedbackUuidStr.trim().isEmpty()) {
+        if (batchIdStr != null && !batchIdStr.trim().isEmpty()) {
             meta = meta.withBatchId(Long.valueOf(batchIdStr));
         }
 
