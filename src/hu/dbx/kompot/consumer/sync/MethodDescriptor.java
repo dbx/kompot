@@ -65,10 +65,19 @@ public interface MethodDescriptor<TRequest, TResponse> {
         };
     }
 
+    /**
+     * Returns a copy of the method descriptor with the given timeout value.
+     *
+     * @throws IllegalArgumentException on negative timeout value.
+     */
     @SuppressWarnings("unchecked")
-    default <TReq, TRes> MethodDescriptor<TReq, TRes> withTimeout(long millis) {
+    default MethodDescriptor<TRequest, TResponse> withTimeout(long millis) {
+        if (millis <= 0) {
+            throw new IllegalArgumentException("Timeout value must be positive: " + millis);
+        }
+
         final MethodDescriptor other = this;
-        return new MethodDescriptor<TReq, TRes>() {
+        return new MethodDescriptor<TRequest, TResponse>() {
             @Override
             public String getMethodName() {
                 return other.getMethodName();
@@ -80,12 +89,12 @@ public interface MethodDescriptor<TRequest, TResponse> {
             }
 
             @Override
-            public Class<TReq> getRequestClass() {
+            public Class<TRequest> getRequestClass() {
                 return other.getRequestClass();
             }
 
             @Override
-            public Class<TRes> getResponseClass() {
+            public Class<TResponse> getResponseClass() {
                 return other.getResponseClass();
             }
 
@@ -97,9 +106,13 @@ public interface MethodDescriptor<TRequest, TResponse> {
     }
 
     @SuppressWarnings("unchecked")
-    default <TReq, TRes> MethodDescriptor<TReq, TRes> withRequestClass(final Class requestClass) {
+    default <TReq> MethodDescriptor<TReq, TResponse> withRequestClass(final Class requestClass) {
+        if (requestClass == null) {
+            throw new IllegalArgumentException("Request class must not be null!");
+        }
+
         final MethodDescriptor other = this;
-        return new MethodDescriptor<TReq, TRes>() {
+        return new MethodDescriptor<TReq, TResponse>() {
 
             @Override
             public String getMethodName() {
@@ -117,8 +130,44 @@ public interface MethodDescriptor<TRequest, TResponse> {
             }
 
             @Override
-            public Class<TRes> getResponseClass() {
+            public Class<TResponse> getResponseClass() {
                 return other.getResponseClass();
+            }
+
+            @Override
+            public long getTimeout() {
+                return other.getTimeout();
+            }
+        };
+    }
+
+    @SuppressWarnings("unchecked")
+    default <TRes> MethodDescriptor<TRequest, TRes> withResponseClass(final Class responseClass) {
+        if (responseClass == null) {
+            throw new IllegalArgumentException("Response class must not be null!");
+        }
+
+        final MethodDescriptor other = this;
+        return new MethodDescriptor<TRequest, TRes>() {
+
+            @Override
+            public String getMethodName() {
+                return other.getMethodName();
+            }
+
+            @Override
+            public String getMethodGroupName() {
+                return other.getMethodGroupName();
+            }
+
+            @Override
+            public Class<TRequest> getRequestClass() {
+                return other.getRequestClass();
+            }
+
+            @Override
+            public Class<TRes> getResponseClass() {
+                return responseClass;
             }
 
             @Override
