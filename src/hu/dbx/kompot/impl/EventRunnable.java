@@ -21,9 +21,7 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
     private final UUID eventUuid;
     private final List<EventReceivingCallback> eventReceivingCallbacks;
 
-
     private static final Logger LOGGER = LoggerUtils.getLogger();
-
 
     EventRunnable(ConsumerImpl consumer, ConsumerConfig consumerConfig, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, UUID uuid, List<EventReceivingCallback> eventReceivingCallbacks) {
         this.consumer = consumer;
@@ -70,6 +68,7 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
                     } catch (IllegalStateException e) {
                         // could not find marker for given event code
                         LOGGER.error(e.getMessage() + ", event-uuid=" + eventUuid);
+
                         try {
                             callback.error(e);
                         } catch (RuntimeException ee) {

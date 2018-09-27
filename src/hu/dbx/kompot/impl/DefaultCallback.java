@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.PRIORITY;
+import static hu.dbx.kompot.impl.LoggerUtils.debugEventFrame;
 
 /**
  * Default error handling strategy.
@@ -67,6 +68,7 @@ final class DefaultCallback implements EventStatusCallback {
             try {
                 eventReceivingCallback.onEventProcessedSuccessfully(frame.get(), message);
             } catch (Throwable t) {
+                debugEventFrame(LOGGER, frame.get());
                 LOGGER.error("Error executing callback on event uuid=" + eventId, t);
             }
         }
@@ -89,6 +91,7 @@ final class DefaultCallback implements EventStatusCallback {
             try {
                 eventReceivingCallback.onEventProcessingFailure(frame.get(), e);
             } catch (Throwable t) {
+                debugEventFrame(LOGGER, frame.get());
                 LOGGER.error("Error executing callback on event uuid=" + eventId, t);
             }
         }

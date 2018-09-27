@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static hu.dbx.kompot.impl.LoggerUtils.debugMethodFrame;
+
 final class MethodRunnable implements Runnable {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
@@ -92,6 +94,7 @@ final class MethodRunnable implements Runnable {
                     try {
                         x.onRequestProcessedSuccessfully(mrf, response);
                     } catch (Throwable t) {
+                        debugMethodFrame(LOGGER, mrf);
                         LOGGER.error("Error when running method sending event listener.", t);
                     }
                 });
@@ -99,7 +102,9 @@ final class MethodRunnable implements Runnable {
                 LOGGER.debug("Written response to method {}/{} to {}",
                         methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
             } catch (Throwable t) {
-                LOGGER.error("Exception happened when sending method " + methodUuid, t);
+                LOGGER.error("Exception happened when sending method");
+                debugMethodFrame(LOGGER, frame);
+                LOGGER.error("Method exception: ", t);
                 writeMethodFailure(store, methodKey, t);
 
                 if (frame != null) {
