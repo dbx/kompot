@@ -4,6 +4,7 @@ import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.core.SerializeHelper;
+import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import org.slf4j.Logger;
@@ -16,6 +17,9 @@ import java.util.UUID;
 
 import static hu.dbx.kompot.impl.LoggerUtils.debugMethodFrame;
 
+/**
+ * Represents a job for handling a method request.
+ */
 final class MethodRunnable implements Runnable {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
@@ -25,6 +29,7 @@ final class MethodRunnable implements Runnable {
     private final ConsumerConfig consumerConfig;
     private final List<MethodReceivingCallback> methodEventListeners;
     private final ConsumerHandlers consumerHandlers;
+    private final String methodKey;
 
     MethodRunnable(ConsumerImpl consumer, ConsumerConfig consumerConfig, List<MethodReceivingCallback> methodEventListeners, ConsumerHandlers consumerHandlers, UUID methodUuid) {
         this.consumer = consumer;
@@ -32,105 +37,122 @@ final class MethodRunnable implements Runnable {
         this.methodEventListeners = methodEventListeners;
         this.consumerHandlers = consumerHandlers;
         this.methodUuid = methodUuid;
+        this.methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
     }
 
     @Override
     public void run() {
         try (final Jedis store = consumerConfig.getPool().getResource()) {
-            // try to assign this method to self
 
-            // a metodus cucca ide megy.
-            final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
-
-            // ebben fogom tarolni a metodus hivas reszleteit.
-            MethodRequestFrame frame = null;
-
-            LOGGER.debug("Trying to steal from {}", methodKey);
-            Long result = store.hsetnx(methodKey, "owner", consumer.getConsumerIdentity().getIdentifier());
-
-            if (result == 0) {
-                LOGGER.debug("Could not steal {}", methodKey);
+            if (!steal(store)) {
+                LOGGER.debug("Could not steal {}", methodUuid);
                 // some other instance has already took this item, we do nothing
                 return;
             }
+
+            MethodRequestFrame mrf = null;
 
             // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar egyem az ownership.
             try {
                 final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
 
-                if (!frameOp.isPresent()) {
+                if (frameOp.isPresent()) {
+                    mrf = frameOp.get();
+                    process(store, mrf);
+                } else {
                     LOGGER.debug("Could not read from method {}", methodKey);
                     // lejart a metodus?
-                    return;
                 }
-
-                frame = frameOp.get();
-                final MethodRequestFrame mrf = frame;
-                final MethodDescriptor methodMarker = frame.getMethodMarker();
-
-                store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(methodMarker.getMethodGroupName()), frame.getIdentifier().toString());
-                // esemenykezelok futtatasa
-                methodEventListeners.forEach(x -> {
-                    try {
-                        x.onRequestReceived(mrf);
-                    } catch (Throwable t) {
-                        LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
-                    }
-                });
-                LOGGER.debug("Calling method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
-                // siker eseten visszairjuk a sikeres vackot
-
-                // TODO: irjuk be a folyamatban levo esemenyes soraba!
-                //noinspection unchecked
-                final Object response = consumer.getMethodProcessorAdapter().call(methodMarker, frame.getMethodData(), frame.getMetaData());
-                LOGGER.debug("Called method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
-
-                // TODO: use multi/exec here to writre statuses and stuff.
-                store.hset(methodKey, DataHandling.MethodResponseKeys.RESPONSE.name(), SerializeHelper.serializeObject(response));
-                store.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), DataHandling.Statuses.PROCESSED.name());
-
-                // esemenykezelok futtatasa
-                methodEventListeners.forEach(x -> {
-                    try {
-                        x.onRequestProcessedSuccessfully(mrf, response);
-                    } catch (Throwable t) {
-                        debugMethodFrame(LOGGER, mrf);
-                        LOGGER.error("Error when running method sending event listener.", t);
-                    }
-                });
-
-                LOGGER.debug("Written response to method {}/{} to {}",
-                        methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
             } catch (Throwable t) {
                 LOGGER.error("Exception happened when sending method");
-                debugMethodFrame(LOGGER, frame);
+                debugMethodFrame(LOGGER, mrf);
                 LOGGER.error("Method exception: ", t);
-                writeMethodFailure(store, methodKey, t);
+                writeMethodFailure(store, t);
 
-                if (frame != null) {
-                    final MethodRequestFrame mrf = frame;
-                    // esemenykezelok futtatasa
-                    methodEventListeners.forEach(x -> {
-                        try {
-                            x.onRequestProcessingFailure(mrf, t);
-                        } catch (Throwable e) {
-                            LOGGER.error("Error when running method sending event listener for {} on {}", e);
-                        }
-                    });
+                if (mrf != null) {
+                    callFailureListeners(mrf, t);
                 }
             } finally {
-                // hogy nehogy lejarjon mire megjon a valasz!
-                store.expire(methodKey, 15);
-
-                String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
-                LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
-
-                store.publish(responseNotificationChannel, methodUuid.toString());
+                respond(store);
             }
         }
     }
 
-    private void writeMethodFailure(Jedis store, String methodKey, Throwable t) {
+    private void process(Jedis store, MethodRequestFrame mrf) throws SerializationException {
+
+        final MethodDescriptor methodMarker = mrf.getMethodMarker();
+
+        store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(methodMarker.getMethodGroupName()), mrf.getIdentifier().toString());
+        // esemenykezelok futtatasa
+        methodEventListeners.forEach(x -> {
+            try {
+                x.onRequestReceived(mrf);
+            } catch (Throwable t) {
+                LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
+            }
+        });
+        LOGGER.debug("Calling method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
+
+        //noinspection unchecked
+        final Object response = consumer.getMethodProcessorAdapter().call(methodMarker, mrf.getMethodData(), mrf.getMetaData());
+        LOGGER.debug("Called method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
+
+        // TODO: use multi/exec here to writre statuses and stuff.
+        store.hset(methodKey, DataHandling.MethodResponseKeys.RESPONSE.name(), SerializeHelper.serializeObject(response));
+        store.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), DataHandling.Statuses.PROCESSED.name());
+
+        methodEventListeners.forEach(x -> {
+            try {
+                x.onRequestProcessedSuccessfully(mrf, response);
+            } catch (Throwable t) {
+                debugMethodFrame(LOGGER, mrf);
+                LOGGER.error("Error when running method sending event listener.", t);
+            }
+        });
+
+        LOGGER.debug("Written response to method {}/{} to {}",
+                methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
+    }
+
+    /**
+     * On case of callFailureListeners we run callbacks and write callFailureListeners code.
+     */
+    private void callFailureListeners(MethodRequestFrame mrf, Throwable t) {
+        // esemenykezelok futtatasa
+        methodEventListeners.forEach(x -> {
+            try {
+                x.onRequestProcessingFailure(mrf, t);
+            } catch (Throwable e) {
+                LOGGER.error("Error when running method sending event listener for {} on {}", e);
+            }
+        });
+    }
+
+    /**
+     * Sets timeout on method key and notifies reqester module.
+     */
+    private void respond(Jedis store) {
+        final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
+
+        // hogy nehogy lejarjon mire megjon a valasz!
+        store.expire(methodKey, 15);
+
+        String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
+        LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
+
+        store.publish(responseNotificationChannel, methodUuid.toString());
+    }
+
+    /**
+     * Tries to mark method as being processed by current instance. Returns true iff succeeded.
+     */
+    private boolean steal(Jedis store) {
+        final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
+        LOGGER.debug("Trying to steal from {}", methodUuid);
+        return 0 != store.hsetnx(methodKey, "owner", consumer.getConsumerIdentity().getIdentifier());
+    }
+
+    private void writeMethodFailure(Jedis store, Throwable t) {
         LOGGER.error("Hiba a metodus feldolgozasa kozben!", t);
 
         final Transaction tx = store.multi();
