@@ -24,6 +24,7 @@ import redis.clients.jedis.Transaction;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -35,6 +36,7 @@ import static hu.dbx.kompot.core.SerializeHelper.deserializeResponse;
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.STATUS;
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.RESPONSE;
 import static hu.dbx.kompot.impl.DataHandling.*;
+import static hu.dbx.kompot.impl.DataHandling.Statuses.*;
 
 public final class ProducerImpl implements Producer {
     private static final Logger LOGGER = LoggerUtils.getLogger();
@@ -157,14 +159,15 @@ public final class ProducerImpl implements Producer {
     private <TReq, TRes> void scheduleMethodTimeout(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> responseFuture, long timeoutMs) {
         methodTimeoutExecutor.schedule(() -> {
             if (!responseFuture.isCancelled() && !responseFuture.isCompletedExceptionally() && !responseFuture.isDone()) {
-                methodEventListeners.forEach(methodEventListener -> {
-                    try {
-                        methodEventListener.onTimeOut(requestFrame);
-                    } catch (Throwable t) {
-                        LOGGER.error("Exception when handling onTimeOut callback of " + requestFrame.debugSignature(), t);
-                    }
-                });
-                responseFuture.cancel(false);
+                if (responseFuture.cancel(false)) {
+                    methodEventListeners.forEach(methodEventListener -> {
+                        try {
+                            methodEventListener.onTimeOut(requestFrame);
+                        } catch (Throwable t) {
+                            LOGGER.error("Exception when handling onTimeOut callback of " + requestFrame.debugSignature(), t);
+                        }
+                    });
+                }
             }
         }, timeoutMs, TimeUnit.MILLISECONDS);
     }
@@ -172,17 +175,16 @@ public final class ProducerImpl implements Producer {
     private <TReq, TRes> void messageCallback(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
         //noinspection EmptyFinallyBlock
         try (final Jedis jedis = jedisPool.getResource()) {
-            switch (methodStatus(jedis, keyNaming, requestFrame.getIdentifier())) {
-                case ERROR:
-                    methodError(keyNaming, requestFrame, response, jedis);
-                    break;
-                case PROCESSED:
-                    methodProcessed(keyNaming, requestFrame, response, jedis);
-                    break;
-                case PROCESSING:
-                    // itt mar vissza kellett legyen irva az esemeny feldolgozottsaganak allapota
-                    final String msg = "The event should not be in PROCESSING state! frame=" + requestFrame.debugSignature();
-                    throw new IllegalStateException(msg);
+            Optional<Statuses> i = methodStatus(jedis, keyNaming, requestFrame.getIdentifier());
+            if (!i.isPresent()) {
+                LOGGER.warn("Could not find status for message {}. Maybe already processed?", requestFrame.getIdentifier());
+            } else if (ERROR.equals(i.get())) {
+                methodError(keyNaming, requestFrame, response, jedis);
+            } else if (PROCESSED.equals(i.get())) {
+                methodProcessed(keyNaming, requestFrame, response, jedis);
+            } else if (PROCESSING.equals(i.get())) {// itt mar vissza kellett legyen irva az esemeny feldolgozottsaganak allapota
+                final String msg = "The method should not be in PROCESSING state! frame=" + requestFrame.debugSignature();
+                throw new IllegalStateException(msg);
             }
         } catch (DeserializationException e) {
             response.completeExceptionally(e);
@@ -199,9 +201,14 @@ public final class ProducerImpl implements Producer {
      * @param methodUuid nem null metodus azonosito
      * @return statusz objektum ami soha nem null
      */
-    private Statuses methodStatus(Jedis jedis, KeyNaming keyNaming, UUID methodUuid) {
+    private Optional<Statuses> methodStatus(Jedis jedis, KeyNaming keyNaming, UUID methodUuid) {
         final String methodDetailsKey = keyNaming.methodDetailsKey(methodUuid);
-        return DataHandling.Statuses.valueOf(jedis.hget(methodDetailsKey, STATUS.name()));
+        String statusString = jedis.hget(methodDetailsKey, STATUS.name());
+        if (statusString == null || statusString.isEmpty()) {
+            return Optional.empty();
+        } else {
+            return Optional.of(DataHandling.Statuses.valueOf(statusString));
+        }
     }
 
     /**
