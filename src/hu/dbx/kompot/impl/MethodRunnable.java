@@ -132,15 +132,22 @@ final class MethodRunnable implements Runnable {
      * Sets timeout on method key and notifies reqester module.
      */
     private void respond(Jedis store) {
-        final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
+        if (!store.getClient().isInMulti()) {
 
-        // hogy nehogy lejarjon mire megjon a valasz!
-        store.expire(methodKey, 15);
+            final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
 
-        String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
-        LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
+            // hogy nehogy lejarjon mire megjon a valasz!
+            store.expire(methodKey, 15);
 
-        store.publish(responseNotificationChannel, methodUuid.toString());
+            String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
+            LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
+
+            store.publish(responseNotificationChannel, methodUuid.toString());
+
+        } else {
+            // this is an illegal state. we should not send a notification because it makes no sense.
+            LOGGER.error("A Jedis Multi has been interrupted!");
+        }
     }
 
     /**
