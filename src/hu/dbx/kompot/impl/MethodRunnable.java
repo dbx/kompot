@@ -132,8 +132,14 @@ final class MethodRunnable implements Runnable {
      * Sets timeout on method key and notifies reqester module.
      */
     private void respond(Jedis store) {
-        if (!store.getClient().isInMulti()) {
-
+        if (!store.getClient().isConnected()) {
+            LOGGER.error("Redis got disconnected. exiting.");
+        } else if (store.getClient().isBroken()) {
+            LOGGER.error("Client got broken. exiting.");
+        } else if (store.getClient().isInMulti()) {
+            // this is an illegal state. we should not send a notification because it makes no sense.
+            LOGGER.error("A Jedis Multi has been interrupted! exiting.");
+        } else {
             final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
 
             // hogy nehogy lejarjon mire megjon a valasz!
@@ -143,10 +149,6 @@ final class MethodRunnable implements Runnable {
             LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
 
             store.publish(responseNotificationChannel, methodUuid.toString());
-
-        } else {
-            // this is an illegal state. we should not send a notification because it makes no sense.
-            LOGGER.error("A Jedis Multi has been interrupted!");
         }
     }
 
