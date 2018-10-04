@@ -101,7 +101,8 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
             // itt elkezdjuk feldolgozni a korabban beragadt esemenyeket is, ha vannak.
             consumerConfig.getExecutor().execute(new ConsumerImpl.TrampolineRunner(new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
         } catch (Throwable t) {
-            LOGGER.error("Error during handing event=" + eventUuid);
+            LOGGER.error("Error during handing event=" + eventUuid, t);
+
             throw t;
         } finally {
             processingEvents.decrementAndGet();
