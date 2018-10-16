@@ -10,23 +10,23 @@ import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.producer.EventGroupProvider;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.*;
+import static org.junit.Assert.fail;
 
+@Ignore
 public class MassiveTest {
 
-    public static final int AGENT_COUNT = 10, EVENT_COUNT = 100, MESSAGE_COUNT = 100, BROADCAST_COUNT = 100;
+    public static final int AGENT_COUNT = 10, EVENT_COUNT = 100, MESSAGE_COUNT = 0, BROADCAST_COUNT = 0;
 
 
     @Test
@@ -50,14 +50,14 @@ public class MassiveTest {
 
         Agent(CountDownLatch latch, int nr, AtomicInteger allEvents) {
             this.agentsLatch = latch;
-            this.nr = nr;
             this.allEvents = allEvents;
+            this.sending = nr % 2;
+            this.receiving = (nr + 1) % 2;
         }
 
 
-
         final CountDownLatch agentsLatch;
-        final int nr;
+        final int sending, receiving;
         final AtomicInteger allEvents;
 
         @Override
@@ -70,7 +70,7 @@ public class MassiveTest {
             CommunicationEndpoint endpoint = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), PROVIDER, this);
 
             // feliratkozik egy random esemenyre
-            endpoint.registerEventHandler(SelfDescribingEventProcessor.of(EVENT.get(nr % 2), (data) -> {
+            endpoint.registerEventHandler(SelfDescribingEventProcessor.of(EVENT.get(receiving), (data) -> {
                 try {
                     Thread.sleep((long) (Math.random() * 100));
 
@@ -85,13 +85,12 @@ public class MassiveTest {
             }));
 
             // feliratkozik egy random esemenyre
-            endpoint.registerBroadcastProcessor(SelfDescribingBroadcastProcessor.of(BROADCAST.get(nr % 2), (data) -> {
+            endpoint.registerBroadcastProcessor(SelfDescribingBroadcastProcessor.of(BROADCAST.get(receiving), (data) -> {
                 try {
                     Thread.sleep((long) (Math.random() * 100));
 
-                    int remaining = allEvents.decrementAndGet();
 
-                    System.out.println("Executed broadcast!" + remaining);
+                    System.out.println("Executed broadcast!");
 
                     if (Math.random() < 0.1) throw new RuntimeException("Kacsa.");
 
@@ -100,15 +99,15 @@ public class MassiveTest {
                 }
             }));
 
-            endpoint.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD.get(nr % 2), (data) -> {
+            endpoint.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD.get(receiving), (data) -> {
                 try {
                     Thread.sleep((long) (Math.random() * 100));
 
-                    int remaining = allEvents.decrementAndGet();
+                    System.out.println("Executed method!");
 
-                    System.out.println("Executed method!" + remaining);
-
-                    if (Math.random() < 0.1) throw new RuntimeException("Kacsa.");
+                    //
+                    //
+                    if (Math.random() < 1) throw new RuntimeException("Kacsa.");
 
                     return emptyMap();
                 } catch (InterruptedException e) {
@@ -116,16 +115,47 @@ public class MassiveTest {
                 }
             }));
 
+            System.out.println("Starting endpoint!");
+
             endpoint.start();
+            System.out.println("Started endpoint!");
 
-            for (int i = 0; i < EVENT_COUNT; i++) {
-                Thread.sleep(100);
-                endpoint.asyncSendEvent(EVENT.get((nr + 1) % 2), emptyMap());
-                endpoint.syncCallMethod(METHOD.get((nr + 1) % 2), singletonMap("ali", "baba"));
-                endpoint.broadcast(BROADCAST.get((nr + 1) % 2), singletonMap("bc", 23));
+            try {
+                for (int i = 0; i < EVENT_COUNT; i++) {
+                    //Thread.sleep(100);
+
+                    endpoint.asyncSendEvent(EVENT.get(sending), emptyMap());
+
+                    try {
+                        System.out.println("Before sending method" + i);
+                        endpoint.syncCallMethod(METHOD.get(sending), singletonMap("ali", "baba")).get();
+                        System.out.println("After sending method" + i);
+                    } catch (CancellationException ce) {
+                        System.out.println("OK, cancelled!");
+                        // oks.
+                    } finally {
+                        // azert itt dekrementalom, mert lehet hogy neki sem tudunk allni feldolgozni
+                        System.out.println("Method after " + allEvents.decrementAndGet());
+                    }
+
+                /*
+                try {
+                    endpoint.broadcast(BROADCAST.get((nr + 1) % 2), singletonMap("bc", 23));
+                } finally {
+                    // lehet, hogy minden fogado szal foglalt es ezert nem tudjuk feldolgozni!
+                    allEvents.decrementAndGet();
+                }
+                */
+                }
+            } catch (Throwable t) {
+                System.out.println("Hibaval kileptunk!");
+                t.printStackTrace();
+                fail("Nem szabad, hogy kiszivarogjon!");
+                System.exit(34);
             }
+            System.out.println("Finished sending! " + allEvents.get());
 
-            while (allEvents.get() > nr * (EVENT_COUNT + MESSAGE_COUNT + BROADCAST_COUNT)) {
+            while (allEvents.get() > 0) {
                 Thread.sleep(100);
             }
 
@@ -142,7 +172,7 @@ public class MassiveTest {
 
         @Override
         public String getEventGroup() {
-            return EVENT.get(nr % 2).getEventName();
+            return EVENT.get(receiving).getEventName();
         }
 
         @Override
@@ -152,13 +182,13 @@ public class MassiveTest {
 
         @Override
         public String getMessageGroup() {
-            return METHOD.get(nr % 2).getMethodGroupName();
+            return METHOD.get(receiving).getMethodGroupName();
         }
     }
 
     public final static EventGroupProvider PROVIDER = marker -> singletonList(marker.getEventName());
 
     private final static List<BroadcastDescriptor<Map>> BROADCAST = asList(BroadcastDescriptor.of("BC1", Map.class), BroadcastDescriptor.of("BC2", Map.class));
-    private final static List<MethodDescriptor<Map, Map>> METHOD = asList(MethodDescriptor.ofName("MG1", "METH1"), MethodDescriptor.ofName("MG2", "METH2"));
-    private final static List<EventDescriptor<Map>> EVENT = asList(EventDescriptor.of("EVT", Map.class),EventDescriptor.of("EV2", Map.class));
+    private final static List<MethodDescriptor<Map, Map>> METHOD = asList(MethodDescriptor.ofName("MG1", "METH1").withTimeout(50), MethodDescriptor.ofName("MG2", "METH2").withTimeout(50));
+    private final static List<EventDescriptor<Map>> EVENT = asList(EventDescriptor.of("EVT", Map.class), EventDescriptor.of("EV2", Map.class));
 }

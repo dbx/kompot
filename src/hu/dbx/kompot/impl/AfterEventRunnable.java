@@ -42,12 +42,20 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
 
             if (elems != null && !elems.isEmpty()) {
                 final UUID eventUuid = UUID.fromString(elems.iterator().next());
-                return new EventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks);
+
+                try {
+                    new EventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks).run();
+                } catch (RuntimeException e) {
+                    LOGGER.error("Error while processing event after an other one", e);
+                }
+
+                return this;
+            } else {
+                return null;
             }
         } catch (Throwable t) {
             LOGGER.error("Error on automatic event processing: ", t);
             throw t;
         }
-        return null;
     }
 }

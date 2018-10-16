@@ -19,6 +19,7 @@ public class TestRedis extends ExternalResource {
     private final URI uri;
     private JedisPool pool;
 
+
     public static TestRedis build() {
         try {
             return new TestRedis();
@@ -29,7 +30,16 @@ public class TestRedis extends ExternalResource {
 
     public TestRedis() throws IOException, URISyntaxException {
 //        redisServer = new RedisServer(6379);
-        uri = new URI("redis://localhost:" + 6379 + "/13");
+        uri = getDefaultUri();
+    }
+
+    public static URI getDefaultUri() {
+        try {
+            return new URI("redis://localhost:" + 6379 + "/13");
+        } catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+
+        }
     }
 
     @Override
