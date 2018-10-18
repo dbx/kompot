@@ -56,6 +56,13 @@ public final class MetaDataHolder {
         return new MetaDataHolder(correlationId, userRef, batchId, newFeedbackUuid);
     }
 
+    /**
+     * Returns a new copy with correlation id overridden.
+     */
+    public MetaDataHolder withCorrelationId(String newCorrId) {
+        return new MetaDataHolder(newCorrId, userRef, batchId, feedbackUuid);
+    }
+
     private MetaDataHolder(String correlationId, String userRef, Long batchId, UUID feedbackUuid) {
         this.correlationId = correlationId;
         this.userRef = userRef;
