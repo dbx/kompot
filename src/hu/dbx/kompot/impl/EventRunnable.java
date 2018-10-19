@@ -13,7 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // csokkenti a folyamatban levo eventek szamat.
-final class EventRunnable implements Runnable {
+final class EventRunnable implements ConsumerImpl.Trampoline {
     private final ConsumerImpl consumer;
     private final ConsumerConfig consumerConfig;
     private final AtomicInteger processingEvents;
@@ -34,7 +34,7 @@ final class EventRunnable implements Runnable {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void run() {
+    public ConsumerImpl.Trampoline jump() {
         try {
             final DefaultCallback callback = new DefaultCallback(consumerConfig.getPool(), eventUuid, consumer.getKeyNaming(), consumer.getConsumerIdentity(), eventReceivingCallbacks);
 
@@ -52,7 +52,7 @@ final class EventRunnable implements Runnable {
                     // we remove event here also, so that if the db gents inconsistent then we do not loop on the same value.
                     store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
 
-                    return;
+                    return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
                 } else {
                     // itt a versenyhelyzet elkerulese miatt remove van. ha ezt kiszedjuk, megnonek a logok.
                     store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
@@ -64,7 +64,7 @@ final class EventRunnable implements Runnable {
                         // did not find event details under kiven key in db
                         LOGGER.error(e.getMessage() + ", event-uuid=" + eventUuid);
                         // we do not persist error to db because event uuid likely does not exist is redis.
-                        return;
+                        return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
                     } catch (IllegalStateException e) {
                         // could not find marker for given event code
                         LOGGER.error(e.getMessage() + ", event-uuid=" + eventUuid);
@@ -74,13 +74,13 @@ final class EventRunnable implements Runnable {
                         } catch (RuntimeException ee) {
                             LOGGER.error("Could not write error state back to redis, eventUuid=" + eventUuid, e);
                         }
-                        return;
+                        return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
                     }
                 }
             } catch (DeserializationException e) {
                 LOGGER.error("Could not deserialize event data", e);
                 callback.error(e);
-                return;
+                return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
             }
 
             callback.markProcessing();
@@ -98,6 +98,8 @@ final class EventRunnable implements Runnable {
 
             LOGGER.debug("Processed event uuid={}", eventUuid);
 
+            // itt elkezdjuk feldolgozni a korabban beragadt esemenyeket is, ha vannak.
+            consumerConfig.getExecutor().execute(new ConsumerImpl.TrampolineRunner(new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
         } catch (Throwable t) {
             LOGGER.error("Error during handing event=" + eventUuid, t);
 
@@ -105,5 +107,6 @@ final class EventRunnable implements Runnable {
         } finally {
             processingEvents.decrementAndGet();
         }
+        return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
     }
 }

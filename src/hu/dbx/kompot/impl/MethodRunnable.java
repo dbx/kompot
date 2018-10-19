@@ -63,7 +63,7 @@ final class MethodRunnable implements Runnable {
                     LOGGER.debug("Could not read from method {}", methodKey);
                     // lejart a metodus?
                 }
-            } catch (Exception t) {
+            } catch (Throwable t) {
                 LOGGER.error("Exception happened when sending method");
                 debugMethodFrame(LOGGER, mrf);
                 LOGGER.error("Method exception: ", t);
@@ -74,7 +74,6 @@ final class MethodRunnable implements Runnable {
                 }
             } finally {
                 respond(store);
-                LOGGER.debug("Notified, quitting!");
             }
         }
     }
