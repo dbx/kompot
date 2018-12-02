@@ -115,6 +115,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         startLatch.await();
 
         // we start processing earlier events.
+        LOGGER.debug("started daemon thread.");
         consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
     }
 

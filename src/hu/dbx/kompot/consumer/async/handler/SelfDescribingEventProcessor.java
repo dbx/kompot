@@ -27,26 +27,23 @@ public interface SelfDescribingEventProcessor<TReq> {
             public void handle(TReq request, MetaDataHolder meta, EventStatusCallback callback) {
                 bc.accept(request, meta, callback);
             }
+
+            @Override
+            public String toString() {
+                return "<EventDescriptor of " + event.getEventName() + "." + event.getPriority() + ">";
+            }
         };
     }
 
     static <TReq> SelfDescribingEventProcessor<TReq> of(EventDescriptor<TReq> event, BiConsumer<TReq, MetaDataHolder> bc) {
-        return new SelfDescribingEventProcessor<TReq>() {
-            @Override
-            public EventDescriptor<TReq> getEventMarker() {
-                return event;
+        return of(event, (a, b, c) -> {
+            try {
+                bc.accept(a, b);
+                c.success("OK");
+            } catch (Throwable t) {
+                c.error(t.getMessage());
             }
-
-            @Override
-            public void handle(TReq request, MetaDataHolder meta, EventStatusCallback callback) {
-                try {
-                    bc.accept(request, meta);
-                    callback.success("OK");
-                } catch (Throwable t) {
-                    callback.error(t);
-                }
-            }
-        };
+        });
     }
 
     static <TReq> SelfDescribingEventProcessor<TReq> of(EventDescriptor<TReq> event, Consumer<TReq> handler) {

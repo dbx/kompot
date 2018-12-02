@@ -15,6 +15,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.singletonMap;
+import static junit.framework.TestCase.assertEquals;
+import static junit.framework.TestCase.assertTrue;
 
 /**
  * Tests massive event sending.
@@ -57,7 +59,10 @@ public class MassiveEventsTest {
         receiver.start();
         System.out.println("Started receiver...");
 
-        remainingEvents.await(5, TimeUnit.SECONDS);
+        boolean success = remainingEvents.await(5, TimeUnit.SECONDS);
         receiver.stop();
+
+        assertEquals(0L, remainingEvents.getCount());
+        assertTrue(success);
     }
 }

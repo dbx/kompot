@@ -18,17 +18,7 @@ public interface EventDescriptor<TReq> {
     Class<? extends TReq> getRequestClass();
 
     static <T> EventDescriptor<T> of(String name, Class<? extends T> t) {
-        return new EventDescriptor<T>() {
-            @Override
-            public String getEventName() {
-                return name;
-            }
-
-            @Override
-            public Class<? extends T> getRequestClass() {
-                return t;
-            }
-        };
+        return of(name, t, LOW);
     }
 
     static <T> EventDescriptor<T> of(String name, Class<? extends T> t, Priority priority) {
@@ -46,6 +36,11 @@ public interface EventDescriptor<TReq> {
             @Override
             public Priority getPriority() {
                 return priority;
+            }
+
+            @Override
+            public String toString() {
+                return "<EventDescriptor of " + name + " with p=" + priority + " class=" + t + ">";
             }
         };
     }
