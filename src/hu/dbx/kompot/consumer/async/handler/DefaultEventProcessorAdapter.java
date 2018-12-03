@@ -19,7 +19,6 @@ public final class DefaultEventProcessorAdapter implements EventProcessorAdapter
      * Registers a new async event processor instance.
      */
     public void register(final SelfDescribingEventProcessor processor) {
-        System.out.println("Registered: " + markerToProcessor);
         markerToProcessor.put(processor.getEventMarker(), processor);
     }
 
@@ -64,8 +63,11 @@ public final class DefaultEventProcessorAdapter implements EventProcessorAdapter
         if (null == eventName || eventName.isEmpty()) {
             throw new IllegalArgumentException("resolveMarker got empty eventName!");
         } else {
-            System.out.println("Supported markers + " + getSupportedEvents());
             return getSupportedEvents().stream().filter(x -> x.getEventName().equalsIgnoreCase(eventName)).findAny();
         }
+    }
+
+    public String toString() {
+        return "Event resolver for events: " + getSupportedEvents();
     }
 }

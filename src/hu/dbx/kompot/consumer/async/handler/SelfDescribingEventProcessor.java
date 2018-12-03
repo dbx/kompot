@@ -2,6 +2,7 @@ package hu.dbx.kompot.consumer.async.handler;
 
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.EventStatusCallback;
+
 import hu.dbx.kompot.moby.MetaDataHolder;
 
 import java.util.function.BiConsumer;
