@@ -253,7 +253,7 @@ public final class Reporting implements EventQueries, EventUpdates {
             do {
                 step = jedis.scan(pointer, new ScanParams().match(keyNaming.allEventDetailsKey()).count(256));
 
-                pointer = step.getStringCursor();
+                pointer = step.getCursor();
                 step.getResult().stream()
                         .filter(edk -> "0".equals(jedis.hget(edk, DataHandling.EventKeys.UNPROCESSED_GROUPS.name())))
                         .forEach((final String eventDataKey) -> {
