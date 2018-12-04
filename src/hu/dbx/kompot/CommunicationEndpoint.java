@@ -24,9 +24,12 @@ import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
+import hu.dbx.kompot.status.StatusReport;
 import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
+import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -233,5 +236,19 @@ public final class CommunicationEndpoint {
      */
     public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor, TReq data) throws SerializationException, IllegalStateException {
         producer.broadcast(descriptor, data);
+    }
+
+    /**
+     * Adds a new system status reporting
+     */
+    public void registerStatusReporter(Callable<StatusReport.StatusItem> reporter) {
+        throw new IllegalStateException("Not implemented!");
+    }
+
+    /**
+     * Returns a list of all systems found in the Kompot network.
+     */
+    public List<StatusReport> findStatuses() {
+        throw new IllegalStateException("Not implemented!");
     }
 }
