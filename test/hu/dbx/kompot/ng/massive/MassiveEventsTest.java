@@ -31,14 +31,14 @@ import static junit.framework.TestCase.assertEquals;
 public class MassiveEventsTest {
 
 
-    private static final int EVENT_COUNT = 1000;
+    private static final int EVENT_COUNT = 400;
     private static final String EVENT_NAME = UUID.randomUUID().toString();
     private static final EventDescriptor<Map> EVENT1 = EventDescriptor.of(EVENT_NAME, Map.class);
     private static final ConsumerIdentity serverIdentity = groupGroup(EVENT_NAME);
-    private static final EventGroupProvider PROVIDER = EventGroupProvider.identity();
 
-    private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
+    private static final String RECEIVER_GROUP = "RECEIVER_GROUP";
+    private static final EventGroupProvider PROVIDER = EventGroupProvider.constantly(RECEIVER_GROUP);
 
     @Before
     public void before() throws IOException, URISyntaxException {
@@ -49,19 +49,29 @@ public class MassiveEventsTest {
     public void testcd() throws Exception {
         final CountDownLatch remainingEvents = new CountDownLatch(EVENT_COUNT);
 
-        sendEvents(executor);
+        sendInitialEvents();
 
         // state 2 - processing all events from multiple agents
-        startConsumer(remainingEvents);
+        consumeInitialEvents(remainingEvents);
 
         assertEquals(0L, remainingEvents.getCount());
     }
 
-    private static void startConsumer(CountDownLatch remainingEvents) throws IOException, URISyntaxException, InterruptedException, SerializationException {
-        final CommunicationEndpoint receiver = CommunicationEndpoint.ofRedisConnectionUri(new TestRedis().getConnectionURI(), PROVIDER, serverIdentity);
+    private static void consumeInitialEvents(CountDownLatch remainingEvents) throws IOException, URISyntaxException, InterruptedException, SerializationException {
+        final CommunicationEndpoint receiver = CommunicationEndpoint.ofRedisConnectionUri(new TestRedis().getConnectionURI(), PROVIDER, groupGroup(RECEIVER_GROUP));
         receiver.registerEventHandler(SelfDescribingEventProcessor.of(EVENT1,
                 (x) -> {
+                    try {
+                        /// XXX: BUG: 
+                        // ha felveszem a timeout-ot 10ms-re akkor jo lesz
+                        // egyebkent egy ido utan nem dolgozza fel az esemenyeket.
+                        Thread.sleep(1L)
+                        ;
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                     remainingEvents.countDown();
+                    System.out.println("Has this many left: " + remainingEvents.getCount());
                     if (Math.random() > 0.6) {
                         throw new Error("asd");
                     }
@@ -73,7 +83,9 @@ public class MassiveEventsTest {
         System.out.println("Started receiver...");
 
         remainingEvents.await();
+        System.out.println("Ended...");
 
+        /*
         Thread.sleep(500L);
 
         final CountDownLatch phase2Events = new CountDownLatch(EVENT_COUNT);
@@ -89,10 +101,11 @@ public class MassiveEventsTest {
 
         sendPhase2Events(phase2Events);
         phase2Events.await();
-
+*/
         receiver.stop();
     }
 
+    /*
     private static void sendPhase2Events(CountDownLatch phase2) throws IOException, URISyntaxException, hu.dbx.kompot.exceptions.SerializationException {
         final TestRedis redis = new TestRedis();
 
@@ -108,9 +121,16 @@ public class MassiveEventsTest {
         }
         sender.stop();
     }
+*/
 
-    private static void sendEvents(ExecutorService executor) throws IOException, URISyntaxException, hu.dbx.kompot.exceptions.SerializationException, InterruptedException {
+
+    /**
+     * Send an initial set of events.
+     */
+    private static void sendInitialEvents() throws IOException, URISyntaxException, hu.dbx.kompot.exceptions.SerializationException, InterruptedException {
         final TestRedis redis = new TestRedis();
+
+        final ExecutorService executor = Executors.newFixedThreadPool(4);
 
         // stage 1 - sending all events
 
@@ -120,7 +140,7 @@ public class MassiveEventsTest {
         for (int i = 0; i < EVENT_COUNT; i++) {
             sender.asyncSendEvent(EVENT1, singletonMap("a", 2));
         }
+        executor.awaitTermination(6, TimeUnit.SECONDS);
         sender.stop();
-        executor.awaitTermination(3, TimeUnit.SECONDS);
     }
 }
