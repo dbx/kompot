@@ -24,18 +24,21 @@ import static java.util.Collections.singletonMap;
 import static junit.framework.TestCase.assertEquals;
 
 /**
- * Send a lot of events wait then start processing.
+ * Tests the processing of lots of quick events.
  * <p>
- * Event processing is quick. We check here for race conditions. All events should get processed eventually.
+ * 1. Send out a lot of small events then stop producer.
+ * 2. Start consumer then process all the small events.
+ * 3. Each event processing step is extremely quick (<1ms)
+ * 4. All events should get processed eventually.
+ * <p>
+ * We check here for race conditions. On some occasions events used to get stuck when event processing was too quick.
  */
-public class MassiveEventsTest {
+public class LotsOfQuickEventHandlingTest {
 
 
     private static final int EVENT_COUNT = 1000;
     private static final String EVENT_NAME = UUID.randomUUID().toString();
     private static final EventDescriptor<Map> EVENT1 = EventDescriptor.of(EVENT_NAME, Map.class);
-    private static final ConsumerIdentity serverIdentity = groupGroup(EVENT_NAME);
-
 
     private static final String RECEIVER_GROUP = "RECEIVER_GROUP";
     private static final EventGroupProvider PROVIDER = EventGroupProvider.constantly(RECEIVER_GROUP);
