@@ -208,7 +208,6 @@ public final class CommunicationEndpoint {
 
     public void registerEventHandler(SelfDescribingEventProcessor adapter) {
         events.register(adapter);
-        System.out.println("Registered: " + events.getSupportedEvents());
     }
 
     public void registerMethodProcessor(SelfDescribingMethodProcessor methodProcessor) {

@@ -58,7 +58,6 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
                     store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
 
                     try {
-                        System.out.println("> event resolver: " + consumerHandlers.getEventResolver());
                         frame = DataHandling.readEventFrame(store, consumer.getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
                         callback.setFrame(frame);
                     } catch (IllegalArgumentException e) {
