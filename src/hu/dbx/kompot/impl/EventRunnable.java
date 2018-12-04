@@ -98,15 +98,12 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
 
             LOGGER.debug("Processed event uuid={}", eventUuid);
 
-            // itt elkezdjuk feldolgozni a korabban beragadt esemenyeket is, ha vannak.
-            consumerConfig.getExecutor().execute(new ConsumerImpl.TrampolineRunner(new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
+            // az a gond, hogy a processingEventsCounter a finally-ban csokkentve lesz, de itt nem.
+            return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
         } catch (Throwable t) {
             LOGGER.error("Error during handing event=" + eventUuid, t);
 
             throw t;
-        } finally {
-            processingEvents.decrementAndGet();
         }
-        return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);
     }
 }

@@ -66,4 +66,8 @@ public final class DefaultEventProcessorAdapter implements EventProcessorAdapter
             return getSupportedEvents().stream().filter(x -> x.getEventName().equalsIgnoreCase(eventName)).findAny();
         }
     }
+
+    public String toString() {
+        return "Event resolver for events: " + getSupportedEvents();
+    }
 }

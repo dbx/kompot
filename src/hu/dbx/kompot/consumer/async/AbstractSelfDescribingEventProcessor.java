@@ -15,4 +15,9 @@ public abstract class AbstractSelfDescribingEventProcessor<T> implements SelfDes
     public EventDescriptor<T> getEventMarker() {
         return eventMarker;
     }
+
+    @Override
+    public String toString() {
+        return "<Event Decr" + getEventMarker().getEventName() + "." + getEventMarker().getPriority() + ">";
+    }
 }

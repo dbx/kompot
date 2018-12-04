@@ -86,7 +86,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
             if (channel.startsWith("b:")) {
                 final String broadcastCode = channel.substring(2);
                 LOGGER.info("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
-                consumerConfig.getExecutor().execute(new BroadcastRunnable(broadcastCode, message));
+                submitToExecutor(new BroadcastRunnable(broadcastCode, message));
             } else if (channel.startsWith("e:")) {
                 startEventProcessing(UUID.fromString(message));
             } else if (channel.startsWith("m:")) {                 // uzenet keres
@@ -95,7 +95,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
                 final String methodName = channel.substring(2);
                 try {
                     MethodRunnable runnable = new MethodRunnable(ConsumerImpl.this, consumerConfig, methodEventListeners, consumerHandlers, UUID.fromString(message));
-                    consumerConfig.getExecutor().execute(runnable);
+                    submitToExecutor(runnable);
                 } catch (RejectedExecutionException rejected) {
                     LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
                 }
@@ -115,7 +115,10 @@ public final class ConsumerImpl implements Consumer, Runnable {
         startLatch.await();
 
         // we start processing earlier events.
-        consumerConfig.getExecutor().execute(new TrampolineRunner(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks)));
+        LOGGER.debug("started daemon thread.");
+        // csak azert noveljuk, mert az after event runnable csokkenteni fogja!
+        processingEvents.incrementAndGet();
+        submitToExecutorTrampoline(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks));
     }
 
     public void shutdown() {
@@ -234,7 +237,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
             throw new IllegalArgumentException("can not start processing event will null uuid!");
         } else if (processingEvents.incrementAndGet() < MAX_EVENTS) {
             try {
-                consumerConfig.getExecutor().execute(new TrampolineRunner(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks)));
+                submitToExecutorTrampoline(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks));
             } catch (RejectedExecutionException e) {
                 LOGGER.debug("Could not execute event of id {}", eventUuid);
                 processingEvents.decrementAndGet();
@@ -246,6 +249,14 @@ public final class ConsumerImpl implements Consumer, Runnable {
         }
     }
 
+    private void submitToExecutorTrampoline(Trampoline trampoline) {
+        submitToExecutor(new TrampolineRunner(trampoline));
+    }
+
+    private void submitToExecutor(Runnable runnable) {
+        consumerConfig.getExecutor().execute(runnable);
+    }
+
     interface Trampoline {
         Trampoline jump();
     }
@@ -254,16 +265,18 @@ public final class ConsumerImpl implements Consumer, Runnable {
     public final static class TrampolineRunner implements Runnable {
         private Trampoline trampoline;
 
-        public TrampolineRunner(Trampoline t) {
+        TrampolineRunner(Trampoline t) {
             trampoline = t;
         }
 
         @Override
         public void run() {
             try {
+                LOGGER.info("Started trampoline.");
                 while (trampoline != null) {
                     trampoline = trampoline.jump();
                 }
+                LOGGER.info("Exited trampoline.");
             } catch (Throwable t) {
                 LOGGER.error("Error on trampoline=" + trampoline, t);
             }

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,8 +33,22 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
         this.eventReceivingCallbacks = eventReceivingCallbacks;
     }
 
+    @SuppressWarnings("OptionalIsPresent")
     @Override
     public ConsumerImpl.Trampoline jump() {
+        final Optional<UUID> eventUuid = findNextEvent();
+        if (eventUuid.isPresent()) {
+            return new EventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventUuid.get(), eventReceivingCallbacks);
+        } else {
+            final int afterDecrement = processingEvents.decrementAndGet();
+            if (afterDecrement < 0) {
+                throw new IllegalStateException("Processing Events counter must not ever get negative: " + afterDecrement);
+            }
+            return null;
+        }
+    }
+
+    private Optional<UUID> findNextEvent() {
         final String groupCode = consumer.getConsumerIdentity().getEventGroup();
         final String dbKey = consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode);
 
@@ -41,13 +56,13 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
             final Set<String> elems = store.zrangeByScore(dbKey, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, 1);
 
             if (elems != null && !elems.isEmpty()) {
-                final UUID eventUuid = UUID.fromString(elems.iterator().next());
-                return new EventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks);
+                return Optional.of(UUID.fromString(elems.iterator().next()));
+            } else {
+                return Optional.empty();
             }
         } catch (Throwable t) {
-            LOGGER.error("Error on automatic event processing: ", t);
+            LOGGER.error("Error on finding next event!", t);
             throw t;
         }
-        return null;
     }
 }
