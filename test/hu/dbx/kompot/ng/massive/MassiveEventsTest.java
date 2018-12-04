@@ -24,14 +24,14 @@ import static java.util.Collections.singletonMap;
 import static junit.framework.TestCase.assertEquals;
 
 /**
- * Send a lot of events, process them then send an other load of events.
+ * Send a lot of events wait then start processing.
  * <p>
- * All events should get processed.
+ * Event processing is quick. We check here for race conditions. All events should get processed eventually.
  */
 public class MassiveEventsTest {
 
 
-    private static final int EVENT_COUNT = 400;
+    private static final int EVENT_COUNT = 1000;
     private static final String EVENT_NAME = UUID.randomUUID().toString();
     private static final EventDescriptor<Map> EVENT1 = EventDescriptor.of(EVENT_NAME, Map.class);
     private static final ConsumerIdentity serverIdentity = groupGroup(EVENT_NAME);
@@ -46,7 +46,7 @@ public class MassiveEventsTest {
     }
 
     @Test
-    public void testcd() throws Exception {
+    public void testMassiveEventsQuickPostprocess() throws Exception {
         final CountDownLatch remainingEvents = new CountDownLatch(EVENT_COUNT);
 
         sendInitialEvents();
@@ -61,68 +61,20 @@ public class MassiveEventsTest {
         final CommunicationEndpoint receiver = CommunicationEndpoint.ofRedisConnectionUri(new TestRedis().getConnectionURI(), PROVIDER, groupGroup(RECEIVER_GROUP));
         receiver.registerEventHandler(SelfDescribingEventProcessor.of(EVENT1,
                 (x) -> {
-                    try {
-                        /// XXX: BUG: 
-                        // ha felveszem a timeout-ot 10ms-re akkor jo lesz
-                        // egyebkent egy ido utan nem dolgozza fel az esemenyeket.
-                        Thread.sleep(1L)
-                        ;
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+                    // this handler is extremely quick
+
                     remainingEvents.countDown();
-                    System.out.println("Has this many left: " + remainingEvents.getCount());
                     if (Math.random() > 0.6) {
                         throw new Error("asd");
                     }
                 }
         ));
 
-        System.out.println("Has this many events: " + remainingEvents.getCount());
         receiver.start();
-        System.out.println("Started receiver...");
-
         remainingEvents.await();
-        System.out.println("Ended...");
 
-        /*
-        Thread.sleep(500L);
-
-        final CountDownLatch phase2Events = new CountDownLatch(EVENT_COUNT);
-
-        receiver.registerEventHandler(SelfDescribingEventProcessor.of(EVENT1,
-                (x) -> {
-                    phase2Events.countDown();
-                    if (Math.random() > 0.6) {
-                        throw new RuntimeException("asd");
-                    }
-                }
-        ));
-
-        sendPhase2Events(phase2Events);
-        phase2Events.await();
-*/
         receiver.stop();
     }
-
-    /*
-    private static void sendPhase2Events(CountDownLatch phase2) throws IOException, URISyntaxException, hu.dbx.kompot.exceptions.SerializationException {
-        final TestRedis redis = new TestRedis();
-
-        // stage 1 - sending all events
-
-        long total = phase2.getCount();
-
-        final ConsumerIdentity senderIdentity = groupGroup("Sender");
-        final CommunicationEndpoint sender = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), PROVIDER, senderIdentity);
-        sender.start();
-        for (int i = 0; i < total; i++) {
-            sender.asyncSendEvent(EVENT1, singletonMap("a", 2));
-        }
-        sender.stop();
-    }
-*/
-
 
     /**
      * Send an initial set of events.
