@@ -4,7 +4,7 @@
                  [mount "0.1.11"]
                  [hiccup "1.0.5"]
                  [http-kit "2.2.0"]
-                 [hu.dbx/kompot "0.1.2-SNAPSHOT"]
+                 [hu.dbx/kompot "0.1.24-SNAPSHOT"]
                  [org.slf4j/slf4j-log4j12 "1.7.25" ]]
   :main hu.dbx.kompot.main
   :pom-addition [:properties
