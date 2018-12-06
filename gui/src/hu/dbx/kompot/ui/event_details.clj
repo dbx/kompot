@@ -1,17 +1,20 @@
 (ns hu.dbx.kompot.ui.event-details
+  (:import [java.util UUID])
   (:require [mount.core :refer [defstate]]
             [org.httpkit.server :refer [run-server]]
             [hiccup.def :refer [defhtml]]
             [hu.dbx.kompot.web :refer :all]
-            [hu.dbx.kompot.common :refer :all]))
+            [hu.dbx.kompot.common :refer :all]
+            [hu.dbx.kompot.util :refer :all]
+            [hu.dbx.kompot.routing :refer [defreq]]))
 
 
 (set! *warn-on-reflection* true)
 
 (defhtml details-group [details uuid group]
-  (assert (string? uuid))
+  (assert (uuid? uuid))
   (assert (string? group))
-  (let [history (seq (.getEventHistory Reporting uuid group))]
+  #_(let [history (seq (.getEventHistory Reporting uuid group))]
     [:section.section
      [:div.card {:style "box-shadow: 0 2px 6px silver"}
       [:header.card-header
@@ -51,7 +54,10 @@
     [:div.has-text-centered {:style "padding: 1em 0"}
      [:a.button {:href "/events"} "Back to events"]]
     [:h1.title.has-text-centered "Async event history"]
-    (let [details (into {} (.getEventDetails Reporting uuid))]
+    (let [{:keys [eventType sender firstSent groups data] :as details}
+          (bean (.get (.queryEventData Reporting uuid)))
+
+          ]
       [:div
        [:div.columns
         [:div.column
@@ -60,33 +66,35 @@
           [:tbody
            [:tr
             [:td [:p.has-text-right "Event code: "]]
-            [:td (render-event-name (details "code"))]]
+            [:td (render-event-name eventType)]]
            [:tr
             [:td [:p.has-text-right "Dispatched at: "]]
-            [:td [:p [:i (details "firstSent")]]]]
+            [:td [:p [:i firstSent]]]]
            [:tr
             [:td [:p.has-text-right "Event identifier: "]]
-            [:td (render-client-id (str uuid))]]
+            [:td (render-client-id uuid)]]
            [:tr
             [:td [:p.has-text-right "Sender module id:"]]
-            [:td (render-client-id (details "sender"))]]]]]
+            [:td (render-client-id sender)]]]]]
         [:div.column
          [:h2.subtitle.has-text-centered "Data"]
-         [:pre (details "data")]]]
+         [:pre data]]]
        [:h2.subtitle.has-text-centered "Handler Statuses"]
-       [:div (for [group (details "groups")]
+       [:div (for [group (.split groups ",")]
                (details-group details uuid group))]
        [:div.x-footer [:br]]])]))
 
-(defmethod handle ["events" :uuid] [req]
-  {:body (app-event (-> req :route :args first))})
+(defn url-event [uuid] (str "/events/uuid/" uuid))
 
-(defmethod handle ["events" :uuid "resend" :number] [req]
-  ;; TODO: issue resend...
-  (let [uuid          (-> req :route :args first)
-        event-details (.getEventDetails Reporting uuid)
-        all-groups    (vec (get event-details "groups"))
-        event-code    (nth all-groups (-> req :route :args second Integer/parseInt))]
-    (.resend Reporting uuid event-code)
-    {:headers {"Location" (str "/events/" (-> req :route :args first))}
-     :status  301}))
+(defreq GET "/events/uuid/:uuid"
+  (fn [req] {:body (app-event (-> req :route-params :uuid UUID/fromString)) :status 200}))
+
+(defreq POST "/events/uuid/:uuid/resend/:n"
+  (fn [req]
+    (let [uuid          (-> req :route-params :uuid)
+          event-details (.getEventDetails Reporting uuid)
+          all-groups    (vec (get event-details "groups"))
+          event-code    (nth all-groups (-> req :route-params :n ->int))]
+      (.resend Reporting uuid event-code)
+      {:headers {"Location" (url-event uuid)}
+       :status  301})))

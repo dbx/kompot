@@ -3,7 +3,8 @@
             [org.httpkit.server :refer [run-server]]
             [hiccup.def :refer [defhtml]]
             [hu.dbx.kompot.web :as web :refer :all]
-            [hu.dbx.kompot.common :refer :all]))
+            [hu.dbx.kompot.common :refer :all]
+            [hu.dbx.kompot.routing :refer [defreq]]))
 
 (set! *warn-on-reflection* true)
 
@@ -15,8 +16,7 @@
      [:div.tabs.is-toggle.is-centered.is-small
       [:ul
        (for [g (.listAllEventGroups Reporting)]
-         [:li [:a {:href (str "/events/" g)}
-               [:span (str g)]]])]]]
+         [:li [:a {:href (str "/events/type/" g)} [:span (str g)]]])]]]
     [:div]]))
 
 (defhtml app-event-group [event-group-name]
@@ -36,9 +36,11 @@
                                 (str event-group-name)
                                 nil
                                 (hu.dbx.kompot.report.Pagination/fromOffsetAndLimit 0 100)
-                                ))]
+                                ))
+           :let [uuid (-> g .getEventData .getUuid str)]]
        [:tr
-        [:td [:kbd (str (-> g .getEventData .getUuid))]]
+        [:td [:a {:href (str "/events/uuid/" uuid)}
+              [:kbd uuid]]]
         [:td [:code (str (-> g .getEventData .getEventType))]]
         [:td [:kbd (str (-> g .getEventData .getSender))]]
         [:td [:p [:i (str (-> g .getEventData .getFirstSent))]]]
@@ -72,8 +74,8 @@
     [:div]])
   )
 
-(defmethod web/handle ["events"] [req]
-  {:body (app-main)})
+(defreq GET "/events"
+  (fn [req] {:body (app-main) :status 200}))
 
-(defmethod web/handle ["events" "POLICY"] [req]
-  {:body (app-event-group "POLICY")})
+(defreq GET "/events/type/:event-type"
+  (fn [req] {:body (app-event-group (-> req :route-params :event-type))}))

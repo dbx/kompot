@@ -4,7 +4,9 @@
             [hiccup.def :refer [defhtml]]
             [hu.dbx.kompot.web :as web :refer :all]
             [hu.dbx.kompot.common :refer :all]
-            [clojure.pprint :refer [pprint]]))
+            [hu.dbx.kompot.util :refer :all]
+            [clojure.pprint :refer [pprint]]
+            [hu.dbx.kompot.routing :refer [defreq]]))
 
 (set! *warn-on-reflection* true)
 
@@ -51,10 +53,12 @@
            (details-group uuid group))]]])]))
 
 ;; TODO: send status code too.
-(defmethod handle ["events" :uuid :number] [req]
-  (let [uuid          (-> req :route :args first)
-        event-details (.getEventDetails Reporting uuid)
-        all-groups    (vec (get event-details "groups"))
-        event-code    (nth all-groups (-> req :route :args second Integer/parseInt))
-        group-history (.getEventHistory Reporting uuid event-code)]
-    {:body (view event-details group-history)}))
+(defreq GET "/events/uuid/:uuid/:number"
+  (fn [req]
+    (let [uuid          (-> req :route-params :uuid)
+          event-details (.getEventDetails Reporting uuid)
+          all-groups    (vec (get event-details "groups"))
+          event-code    (nth all-groups (-> req :route-params :number ->int))
+          group-history (.getEventHistory Reporting uuid event-code)]
+      {:body (view event-details group-history)
+       :status 200})))

@@ -1,25 +1,11 @@
 (ns hu.dbx.kompot.web
   "Helpers for web servers"
-  (:require [hiccup.def :refer [defhtml]]))
+  (:require [hiccup.def :refer [defhtml]]
+            [hu.dbx.kompot.routing :refer [defreq handle-routes]]))
 
 (set! *warn-on-reflection* true)
 
-(defn parse-uri [s]
-  (let [parts (filter seq (.split s "/"))
-        ptf   (fn [s] (cond
-                        (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}" s) :uuid
-                        (re-matches #"[0-9]+" s) :number
-                        :otherwise    s))]
-    {:uri  (mapv ptf parts)
-     :args (filterv (comp not string? ptf) parts)}))
-
-;; (parse-uri "/events/3")
-
-(defmulti handle (comp :uri :route))
-
-
-(defn handler [request]
-  (handle (assoc request :route (parse-uri (:uri request)))))
+(def handler handle-routes)
 
 (defhtml wrap-html [contents]
   [:html
@@ -36,10 +22,10 @@
   [:div {:style "padding: 2em 0;"}
    [:div.tabs.is-toggle.is-centered.is-small
     [:ul
-     [:li.is-active [:a [:span "Events"]]]
-     [:li [:a [:span "Messages"]]]
-     [:li [:a [:span "Broadcasts"]]]
-     [:li [:a [:span "Statuses"]]]]]])
+     [:li.is-active [:a {:href "/events"} [:span "Events"]]]
+     [:li [:a {:href "/messages"} [:span "Messages"]]]
+     [:li [:a {:href "/broadcasts"} [:span "Broadcasts"]]]
+     [:li [:a {:href "/statuses"} [:span "Statuses"]]]]]])
 
 (def status-style {"processing" "background:hsl(48, 100%, 67%)"
                    "failed"     "background:hsl(348, 80%, 81%)"})
@@ -58,7 +44,7 @@
 
 (defn render-status-tag [status]
   (case (.toLowerCase (str status))
-    ("" nil)                  [:span.tag.is-rounded "???"]
+    ("")                      [:span.tag.is-rounded "???"]
     ("done" "processed" "ok") [:span.tag.is-rounded.is-success (icon :check) status]
     ("processing")            [:span.tag.is-rounded.is-warning (icon :exclamation-circle) status]
     ("failed" "fail" "error") [:span.tag.is-rounded.is-danger (icon :exclamation-triangle) status]

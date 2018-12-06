@@ -68,6 +68,13 @@ public final class Reporting implements EventQueries, EventUpdates {
         }
     }
 
+    @Override
+    public Optional<EventData> queryEventData(UUID uuid) {
+        try (Jedis jedis = pool.getResource()) {
+            return queryEvent(jedis, uuid);
+        }
+    }
+
     private Optional<EventGroupData> queryEventGroup(Jedis jedis, String eventGroupName, UUID uuid) {
 
         Optional<EventData> eventData = queryEvent(jedis, uuid);
@@ -81,15 +88,11 @@ public final class Reporting implements EventQueries, EventUpdates {
         final String groupEventStatusStr = jedis.hget(groupEventDataKey, STATUS.name());
 
         if (groupEventStatusStr == null) {
-            LOGGER.error("Group event status with group {} and uuid {} could not be found", eventGroupName, uuid);
-            return Optional.empty();
+            throw new IllegalStateException("Group event status with group and id could not be found! " + eventGroupName + "/" + uuid);
+        } else {
+            final Statuses groupEventStatus = Statuses.valueOf(groupEventStatusStr);
+            return Optional.of(new EventGroupData(eventData.get(), eventGroupName, groupEventStatus));
         }
-
-        final Statuses groupEventStatus = Statuses.valueOf(groupEventStatusStr);
-
-        EventGroupData eventGroupData = new EventGroupData(eventData.get(), eventGroupName, groupEventStatus);
-
-        return Optional.of(eventGroupData);
     }
 
     private Optional<EventData> queryEvent(Jedis jedis, UUID uuid) {

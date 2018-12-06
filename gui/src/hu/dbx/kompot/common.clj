@@ -3,7 +3,7 @@
 
 (set! *warn-on-reflection* true)
 
-(defstate redis-uri :start (new java.net.URI "redis://localhost:16379/1"))
+(defstate redis-uri :start (new java.net.URI "redis://localhost:6379/13"))
 
 (defstate kompot-prefix :start "moby")
 

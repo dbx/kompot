@@ -12,12 +12,12 @@ public final class EventData {
     private final String sender;
     private final LocalDateTime firstSent;
 
-    public EventData(UUID uuid,
-                     String eventType,
-                     String data,
-                     String groups,
-                     String sender,
-                     LocalDateTime firstSent) {
+    EventData(UUID uuid,
+              String eventType,
+              String data,
+              String groups,
+              String sender,
+              LocalDateTime firstSent) {
         this.uuid = uuid;
         this.eventType = eventType;
         this.data = data;

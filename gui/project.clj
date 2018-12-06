@@ -1,7 +1,7 @@
 (defproject hu.dbx/kompot-gui "1.0.0-SNAPSHOT"
   :description "Graphical interface for kompot events"
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [mount "0.1.11"]
+                 [mount "0.1.13"]
                  [hiccup "1.0.5"]
                  [http-kit "2.2.0"]
                  [hu.dbx/kompot "0.1.24-SNAPSHOT"]

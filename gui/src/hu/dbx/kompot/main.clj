@@ -6,7 +6,8 @@
             [hu.dbx.kompot.ui.events]
             [hu.dbx.kompot.ui.event-details]
             [hu.dbx.kompot.ui.event-history]
-            [hu.dbx.kompot.common :refer :all]))
+            [hu.dbx.kompot.common :refer :all]
+            [hu.dbx.kompot.routing :refer [defreq]]))
 
 (set! *warn-on-reflection* true)
 
@@ -14,11 +15,7 @@
 
 (defstate web-port :start 8080) ;; TODO: get it from config.
 
-(defmethod web/handle :default [req]
-  {:status 404 :body "Not Found!!!!!!!4444!four"})
-
-(defmethod web/handle [] [req]
-  {:headers {"Location" "/events"} :status 301})
+(defreq GET "/" (fn [req] {:headers {"Location" "/events"} :status 301}))
 
 (defstate WebServer
   :start (run-server #'web/handler {:port web-port})
