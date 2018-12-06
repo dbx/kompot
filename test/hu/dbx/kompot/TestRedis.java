@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -19,22 +18,27 @@ public class TestRedis extends ExternalResource {
     private final URI uri;
     private JedisPool pool;
 
+    private static final String ENV_KEY = "KOMPOT_REDIS_URI";
+    private static final String DEFAULT_REDIS_URI = "redis://localhost:6379/13";
+
     public static TestRedis build() {
         try {
             return new TestRedis();
-        } catch (IOException | URISyntaxException e) {
+        } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public TestRedis() throws IOException, URISyntaxException {
-//        redisServer = new RedisServer(6379);
-        uri = new URI("redis://localhost:" + 6379 + "/13");
+    public TestRedis() throws URISyntaxException {
+        if (System.getenv().containsKey(ENV_KEY)) {
+            uri = new URI(System.getenv(ENV_KEY));
+        } else {
+            uri = new URI(DEFAULT_REDIS_URI);
+        }
     }
 
     @Override
     public void before() {
-//        redisServer.start();
         pool = new JedisPool(uri);
         try (Jedis jedis = pool.getResource()) {
             LOGGER.info(jedis.info());
@@ -45,7 +49,6 @@ public class TestRedis extends ExternalResource {
     @Override
     public void after() {
         pool.close();
-//        redisServer.stop();
     }
 
     public JedisPool getJedisPool() {

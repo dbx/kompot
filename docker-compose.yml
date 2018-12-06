@@ -1,0 +1,13 @@
+ version: '3'
+ services:
+  test-redis:
+    image: redis:5.0.2
+  test-java:
+    build:
+      context: .
+      dockerfile: TestDockerfile
+    environment:
+      - KOMPOT_REDIS_URI=redis://test-redis:6379/13
+    depends_on:
+      - test-redis
+    command: mvn -f /app/pom.xml clean test
