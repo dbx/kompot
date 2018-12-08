@@ -75,6 +75,10 @@ public final class Reporting implements EventQueries, EventUpdates {
         }
     }
 
+    private List<EventGroupHistoryItem> queryEventGroupHistory(Jedis jedis, String eventGroupName, UUID uuid) {
+        return Collections.emptyList();
+    }
+
     private Optional<EventGroupData> queryEventGroup(Jedis jedis, String eventGroupName, UUID uuid) {
 
         Optional<EventData> eventData = queryEvent(jedis, uuid);
@@ -91,7 +95,10 @@ public final class Reporting implements EventQueries, EventUpdates {
             throw new IllegalStateException("Group event status with group and id could not be found! " + eventGroupName + "/" + uuid);
         } else {
             final Statuses groupEventStatus = Statuses.valueOf(groupEventStatusStr);
-            return Optional.of(new EventGroupData(eventData.get(), eventGroupName, groupEventStatus));
+
+            List<EventGroupHistoryItem> history = queryEventGroupHistory(jedis, eventGroupName, uuid);
+
+            return Optional.of(new EventGroupData(eventData.get(), eventGroupName, groupEventStatus, history));
         }
     }
 

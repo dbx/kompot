@@ -33,8 +33,6 @@ public interface EventQueries {
      */
     Optional<EventGroupData> querySingleEvent(String group, UUID uuid) throws IllegalArgumentException;
 
-    Optional<EventGrou>
-
     /**
      * Finds general event data for item
      */
