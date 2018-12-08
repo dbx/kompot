@@ -4,7 +4,7 @@
             [hiccup.def :refer [defhtml]]
             [hu.dbx.kompot.web :as web :refer :all]
             [hu.dbx.kompot.common :refer :all]
-            [hu.dbx.kompot.routing :refer [defreq]]))
+            [erdos.routing :refer [defreq]]))
 
 (set! *warn-on-reflection* true)
 

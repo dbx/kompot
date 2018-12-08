@@ -6,7 +6,7 @@
             [hu.dbx.kompot.common :refer :all]
             [hu.dbx.kompot.util :refer :all]
             [clojure.pprint :refer [pprint]]
-            [hu.dbx.kompot.routing :refer [defreq]]))
+            [erdos.routing :refer [defreq]]))
 
 (set! *warn-on-reflection* true)
 

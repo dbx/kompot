@@ -1,7 +1,7 @@
 (ns hu.dbx.kompot.web
   "Helpers for web servers"
   (:require [hiccup.def :refer [defhtml]]
-            [hu.dbx.kompot.routing :refer [defreq handle-routes]]))
+            [erdos.routing :refer [defreq handle-routes]]))
 
 (set! *warn-on-reflection* true)
 
