@@ -279,9 +279,9 @@ public final class ProducerImpl implements Producer {
         try (Jedis jedis = producerConfig.getPool().getResource()) {
             final String serializedData = SerializeHelper.serializeObject(broadcastData);
             final String channel = "b:" + descriptor.getBroadcastCode();
-            LOGGER.trace(getProducerIdentity().getIdentifier() + "Broadcasting on channel" + channel);
+            // LOGGER.trace(getProducerIdentity().getIdentifier() + "Broadcasting on channel" + channel);
             jedis.publish(channel, serializedData);
-            LOGGER.trace(getProducerIdentity().getIdentifier() + "Did broadcast on channel " + channel);
+            // LOGGER.trace(getProducerIdentity().getIdentifier() + "Did broadcast on channel " + channel);
         }
     }
 

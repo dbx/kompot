@@ -3,18 +3,20 @@ package hu.dbx.kompot.ng.status;
 import hu.dbx.kompot.CommunicationEndpoint;
 import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
-import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
 import org.junit.Rule;
 import org.junit.Test;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
+import static hu.dbx.kompot.impl.DefaultConsumerIdentity.fromGroups;
+import static java.util.Collections.emptySet;
+import static java.util.Collections.singletonList;
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
 
@@ -24,11 +26,8 @@ import static junit.framework.TestCase.assertTrue;
 @SuppressWarnings("unchecked")
 public class StatusReportTest {
 
-    private static final MethodDescriptor METHOD_1 = MethodDescriptor.ofName("GROUP1", "method1");
-    private static final ConsumerIdentity consumerIdentity = groupGroup("GROUP1");
-    private static final ConsumerIdentity producerIdentity = groupGroup("GROUP2");
+    private static final ConsumerIdentity consumerIdentity = fromGroups("EGROUP", "MGROUP");
 
-    private static String EXCEPTION_MSG = "Now, I am become Death, the destroyer of worlds";
 
     @Rule
     public TestRedis redis = TestRedis.build();
@@ -47,6 +46,14 @@ public class StatusReportTest {
         final List<StatusReport> statuses = consumer.findGlobalStatuses();
 
         assertEquals(1, statuses.size());
+
+
+        assertEquals("EGROUP", statuses.get(0).getEventGroup());
+        assertEquals("MGROUP", statuses.get(0).getMessageGroup());
+
+        assertEquals(new HashSet<>(singletonList("KMPT_SAY_HELLO")), statuses.get(0).getRegisteredBroadcasts());
+        assertEquals(emptySet(), statuses.get(0).getRegisteredEvents());
+        assertEquals(emptySet(), statuses.get(0).getRegisteredMethods());
 
         assertEquals("short", statuses.get(0).getItems().get(0).getName());
         assertTrue(statuses.get(0).getItems().get(0).isOk());

@@ -15,8 +15,6 @@ import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
-import hu.dbx.kompot.core.SerializeHelper;
-import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.ConsumerImpl;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
@@ -28,24 +26,19 @@ import hu.dbx.kompot.impl.producer.ProducerConfig;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
-import hu.dbx.kompot.status.*;
+import hu.dbx.kompot.status.StatusReport;
+import hu.dbx.kompot.status.StatusReporter;
+import hu.dbx.kompot.status.StatusReportingAction;
 import org.slf4j.Logger;
-import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singletonMap;
 
 /**
  * Use this component as a simplified interface to access library functionality.
@@ -66,7 +59,7 @@ public final class CommunicationEndpoint {
     private final AtomicBoolean starting = new AtomicBoolean(false);
     private final AtomicBoolean started = new AtomicBoolean(false);
 
-    private final List<StatusReporter> statusReporters = new ArrayList<>();
+    private final StatusReportingAction statusReportingAction;
 
     // TODO: make prefix configurable!
     private static final DefaultKeyNaming naming = DefaultKeyNaming.ofPrefix("moby");
@@ -95,8 +88,7 @@ public final class CommunicationEndpoint {
 
         this.consumer = new ConsumerImpl(consumerConfig, handlers);
         this.producer = new ProducerImpl(producerConfig, groups, this.consumer);
-
-        registerBroadcastProcessor(new StatusRequestBroadcastHandler(this::findLocalStatusReport, consumerConfig));
+        this.statusReportingAction = new StatusReportingAction(consumer, this);
     }
 
     /**
@@ -150,11 +142,19 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException  ha eppen nem fut a komponensunk
      */
     public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data) throws SerializationException, IllegalStateException {
-        producer.sendEvent(event, data);
+        if (!started.get()) {
+            throw new RuntimeException("Can not send event when not yet started!");
+        } else {
+            producer.sendEvent(event, data);
+        }
     }
 
     public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data, MetaDataHolder metaData) throws SerializationException, IllegalStateException {
-        producer.sendEvent(event, data, metaData);
+        if (!started.get()) {
+            throw new RuntimeException("Can not send event when not yet started!");
+        } else {
+            producer.sendEvent(event, data, metaData);
+        }
     }
 
     /**
@@ -170,11 +170,19 @@ public final class CommunicationEndpoint {
      * @throws NullPointerException   when method argument is null.
      */
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data) throws SerializationException, IllegalStateException {
-        return producer.sendMessage(method, data);
+        if (!started.get()) {
+            throw new RuntimeException("Can not call method when not yet started!");
+        } else {
+            return producer.sendMessage(method, data);
+        }
     }
 
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data, MetaDataHolder metaDataHolder) throws SerializationException, IllegalStateException {
-        return producer.sendMessage(method, data, metaDataHolder);
+        if (!started.get()) {
+            throw new IllegalStateException("Can not call method when not yet started!");
+        } else {
+            return producer.sendMessage(method, data, metaDataHolder);
+        }
     }
 
 
@@ -255,74 +263,32 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException  ha eppen nem fut a komponens.
      */
     public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor, TReq data) throws SerializationException, IllegalStateException {
-        producer.broadcast(descriptor, data);
+        if (!started.get()) {
+            throw new IllegalStateException("Can not broadcast when not yet started!");
+        } else {
+            producer.broadcast(descriptor, data);
+        }
     }
 
     /**
-     * Adds a new system status reporting
+     * Adds a new system status reporting.
      */
-    public void registerStatusReporter(StatusReporter reporter) {
+    public void registerStatusReporter(final StatusReporter reporter) {
         if (reporter == null) {
             throw new IllegalArgumentException("Reporter should not be null!");
+        } else {
+            statusReportingAction.registerStatusReporter(reporter);
         }
-        statusReporters.add(reporter);
     }
 
     /**
-     * Returns a list of all systems found in the current component.
+     * Returns a list of reports from all modules on the network including the current module.
      */
-    private List<StatusReport.StatusItem> findLocalStatuses() {
-
-        List<StatusReport.StatusItem> result = new ArrayList<>();
-
-        for (StatusReporter statusReporter : statusReporters) {
-            StatusReporter.StatusResult statusResult;
-            try {
-                statusResult = statusReporter.getEndpoint().call();
-            } catch (Exception e) {
-                LOGGER.error("Error caught while calling statusReporter " + statusReporter, e);
-                statusResult = StatusReporter.StatusResult.resultError("Endpoint ");
-            }
-            result.add(new StatusItemImpl(statusReporter.getName(), statusReporter.getDescription(), statusResult.getErrorMessage()));
-        }
-        return result;
-    }
-
-    private StatusReport findLocalStatusReport() {
-        final List<StatusReport.StatusItem> items = findLocalStatuses();
-        final ConsumerIdentity id = consumer.getConsumerIdentity();
-
-        // TODO: collect this info.
-        final Set<String> methods = emptySet();
-        final Set<String> events = emptySet();
-        final Set<String> broadcasts = emptySet();
-
-        return new StatusReport(id, null, items, methods, events, broadcasts);
-    }
-
     public List<StatusReport> findGlobalStatuses() {
-
-        try (Jedis jedis = consumer.getConsumerConfig().getPool().getResource()) {
-            final Set<String> ks = SelfStatusWriter.findStatusKeys(jedis, consumer.getKeyNaming());
-            final int moduleCount = ks.size(); // ennyi darab modul fut osszesen
-
-            // some random key where i expect the response.
-            final String newKey = consumer.getKeyNaming().statusResponseKey();
-
-            // send broadcast
-            final Map<String, String> broadcastData = singletonMap("key", newKey);
-            broadcast(StatusRequestBroadcastHandler.DESCRIPTOR, broadcastData);
-
-            // wait for responses from all modules.
-            final List<StatusReport> reports = new ArrayList<>(moduleCount);
-            for (int i = 0; i < moduleCount; i++) {
-                final String response = jedis.blpop(newKey, "5").get(1); // TODO: wait with timeout here.
-                reports.add(SerializeHelper.deserializeStatus(response));
-            }
-            return reports;
-
-        } catch (SerializationException | DeserializationException e) {
-            throw new RuntimeException(e);
+        if (!started.get()) {
+            throw new IllegalStateException("Can not get global statuses when not yet started!");
+        } else {
+            return statusReportingAction.findGlobalStatuses();
         }
     }
 }
