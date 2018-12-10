@@ -1,5 +1,7 @@
 package hu.dbx.kompot.status;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 
 import java.util.Date;
@@ -32,52 +34,93 @@ public final class StatusReport {
         this.registeredBroadcasts = registeredBroadcasts;
     }
 
-    UUID getModuleIdentifier() {
+    @JsonCreator
+    public static StatusReport build(
+            @JsonProperty("moduleIdentifier") UUID moduleIdentifier,
+            @JsonProperty("eventGroup") String eventGroup,
+            @JsonProperty("messageGroup") String messageGroup,
+            @JsonProperty("lastHeartbeatTime") Date lastHeartbeatTime,
+            @JsonProperty("items") List<StatusItem> items,
+
+            @JsonProperty("registeredMethods")
+                    Set<String> registeredMethods,
+            @JsonProperty("registeredEvents")
+                    Set<String> registeredEvents,
+            @JsonProperty("registeredBroadcasts")
+                    Set<String> registeredBroadcasts) {
+        ConsumerIdentity cid = new ConsumerIdentity() {
+            @Override
+            public String getEventGroup() {
+                return eventGroup;
+            }
+
+            @Override
+            public String getIdentifier() {
+                return moduleIdentifier.toString();
+            }
+
+            @Override
+            public String getMessageGroup() {
+                return messageGroup;
+            }
+        };
+        return new StatusReport(cid, lastHeartbeatTime, items, registeredMethods, registeredEvents, registeredBroadcasts);
+    }
+
+    public UUID getModuleIdentifier() {
         return moduleIdentifier;
     }
 
-    String getEventGroup() {
+    public String getEventGroup() {
         return eventGroup;
     }
 
-    String getMessageGroup() {
+    public String getMessageGroup() {
         return messageGroup;
     }
 
     /**
      * Timestamp of last time this module has written its status to the db.
      */
-    Date getLastHeartbeatTime() {
+    public Date getLastHeartbeatTime() {
         return lastHeartbeatTime;
     }
 
-    List<StatusItem> getItems() {
+    public List<StatusItem> getItems() {
         return unmodifiableList(items);
     }
 
     /**
      * Possibly empty list of all methods this module is listening to.
      */
-    Set<String> getRegisteredMethods() {
+    public Set<String> getRegisteredMethods() {
         return registeredMethods;
     }
 
     /**
      * Possibly empty lit of all event codes this module is listening to.
      */
-    Set<String> getRegisteredEvents() {
+    public Set<String> getRegisteredEvents() {
         return registeredEvents;
     }
 
     /**
      * List of all broadcast codes this module is module is listetning to.
      */
-    Set<String> getRegisteredBroadcasts() {
+    public Set<String> getRegisteredBroadcasts() {
         return registeredBroadcasts;
     }
 
-
     public interface StatusItem {
+
+        @JsonCreator
+        static StatusItem build(
+                @JsonProperty("name") String name,
+                @JsonProperty("description") String description,
+                @JsonProperty("errorMessage") String errorMessage,
+                @JsonProperty("ok") boolean ok) {
+            return new StatusItemImpl(name, description, ok ? null : errorMessage);
+        }
 
         /**
          * Short name of the status report.

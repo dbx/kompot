@@ -320,4 +320,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
             eventReceivingCallbacks.remove(callback);
         }
     }
+
+    public ConsumerConfig getConsumerConfig() {
+        return consumerConfig;
+    }
 }

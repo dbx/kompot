@@ -22,7 +22,7 @@ public class StatusRequestBroadcastHandler implements SelfDescribingBroadcastPro
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     // @SuppressWarnings("unchecked")
-    private static final BroadcastDescriptor<Map> DESCRIPTOR = BroadcastDescriptor.of("KMPT_SAY_HELLO", Map.class);
+    public static final BroadcastDescriptor<Map> DESCRIPTOR = BroadcastDescriptor.of("KMPT_SAY_HELLO", Map.class);
 
     private final Supplier<StatusReport> statusReportFactory;
     private final ConsumerConfig config;
@@ -45,6 +45,7 @@ public class StatusRequestBroadcastHandler implements SelfDescribingBroadcastPro
         assert (responseKey != null);
 
         final StatusReport status = statusReportFactory.get();
+        LOGGER.info("Current status is: ", status);
 
         try (final Jedis jedis = config.getPool().getResource()) {
             final String serialized = SerializeHelper.serializeObject(status);
