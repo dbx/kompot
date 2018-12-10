@@ -18,16 +18,22 @@ import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.ConsumerImpl;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
+import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
+import hu.dbx.kompot.status.StatusItemImpl;
 import hu.dbx.kompot.status.StatusReport;
+import hu.dbx.kompot.status.StatusReporter;
+import hu.dbx.kompot.status.StatusRequestBroadcastHandler;
+import org.slf4j.Logger;
 import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @SuppressWarnings("WeakerAccess")
 public final class CommunicationEndpoint {
+    private static final Logger LOGGER = LoggerUtils.getLogger();
 
     public static final int DEFAULT_EXECUTOR_THREADS = 12;
 
@@ -53,6 +60,8 @@ public final class CommunicationEndpoint {
     private final AtomicBoolean starting = new AtomicBoolean(false);
     private final AtomicBoolean started = new AtomicBoolean(false);
 
+
+    private final List<StatusReporter> statusReporters = new ArrayList<>();
 
     // TODO: make prefix configurable!
     private static final DefaultKeyNaming naming = DefaultKeyNaming.ofPrefix("moby");
@@ -77,6 +86,8 @@ public final class CommunicationEndpoint {
 
         this.consumer = new ConsumerImpl(config, handlers);
         this.producer = new ProducerImpl(pool, groups, naming, this.consumer, producerIdentity);
+
+        registerBroadcastProcessor(new StatusRequestBroadcastHandler());
     }
 
     /**
@@ -241,14 +252,38 @@ public final class CommunicationEndpoint {
     /**
      * Adds a new system status reporting
      */
-    public void registerStatusReporter(Callable<StatusReport.StatusItem> reporter) {
-        throw new IllegalStateException("Not implemented!");
+    public void registerStatusReporter(StatusReporter reporter) {
+        if (reporter == null) {
+            throw new IllegalArgumentException("Reporter should not be null!");
+        }
+        statusReporters.add(reporter);
     }
 
     /**
-     * Returns a list of all systems found in the Kompot network.
+     * Returns a list of all systems found in the current component.
      */
-    public List<StatusReport> findStatuses() {
-        throw new IllegalStateException("Not implemented!");
+    public List<StatusReport.StatusItem> findLocalStatuses() {
+
+        List<StatusReport.StatusItem> result = new ArrayList<>();
+
+        for (StatusReporter statusReporter : statusReporters) {
+            StatusReporter.StatusResult statusResult;
+            try {
+                statusResult = statusReporter.getEndpoint().call();
+            } catch (Exception e) {
+                LOGGER.error("Error caught while calling statusReporter " + statusReporter, e);
+                statusResult = StatusReporter.StatusResult.resultError("Endpoint ");
+            }
+            result.add(new StatusItemImpl(statusReporter.getName(), statusReporter.getDescription(), statusResult.getErrorMessage()));
+        }
+        return result;
+    }
+
+    public List<StatusReport.StatusItem> findGlobalStatuses() {
+
+        // 0. megszamolom, h hanyan vannak a halozaton
+        // 1. broadcast kikuldese random kulcsnevvel
+        // 2. beolvasni az n statusz teteleket a kulcs alol.
+        return null;
     }
 }

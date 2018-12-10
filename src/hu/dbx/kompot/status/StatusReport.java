@@ -4,6 +4,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 
 public interface StatusReport {
 
@@ -35,6 +36,7 @@ public interface StatusReport {
      */
     Set<String> getRegisteredBroadcasts();
 
+
     interface StatusItem {
 
         /**
@@ -46,6 +48,11 @@ public interface StatusReport {
          * Short description of the status report.
          */
         String getDescription();
+
+        /**
+         * Error description used if status is not ok
+         */
+        String getErrorMessage();
 
         /**
          * Is the subsystem status acceptable?
