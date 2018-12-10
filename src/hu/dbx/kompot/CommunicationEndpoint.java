@@ -35,7 +35,7 @@ import redis.clients.jedis.JedisPool;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -87,7 +87,7 @@ public final class CommunicationEndpoint {
         this.consumer = new ConsumerImpl(config, handlers);
         this.producer = new ProducerImpl(pool, groups, naming, this.consumer, producerIdentity);
 
-        registerBroadcastProcessor(new StatusRequestBroadcastHandler());
+        registerBroadcastProcessor(new StatusRequestBroadcastHandler(this::findLocalStatusReport, config));
     }
 
     /**
@@ -262,7 +262,7 @@ public final class CommunicationEndpoint {
     /**
      * Returns a list of all systems found in the current component.
      */
-    public List<StatusReport.StatusItem> findLocalStatuses() {
+    private List<StatusReport.StatusItem> findLocalStatuses() {
 
         List<StatusReport.StatusItem> result = new ArrayList<>();
 
@@ -277,6 +277,17 @@ public final class CommunicationEndpoint {
             result.add(new StatusItemImpl(statusReporter.getName(), statusReporter.getDescription(), statusResult.getErrorMessage()));
         }
         return result;
+    }
+
+    public StatusReport findLocalStatusReport() {
+        final List<StatusReport.StatusItem> items = findLocalStatuses();
+        final ConsumerIdentity id = consumer.getConsumerIdentity();
+
+        Set<String> methods = null;
+        Set<String> events = null;
+        Set<String> broadcasts = null;
+
+        return new StatusReport(id, null, items, methods, events, broadcasts);
     }
 
     public List<StatusReport.StatusItem> findGlobalStatuses() {

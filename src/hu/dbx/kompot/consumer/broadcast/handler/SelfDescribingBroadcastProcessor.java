@@ -1,12 +1,14 @@
 package hu.dbx.kompot.consumer.broadcast.handler;
 
+import hu.dbx.kompot.exceptions.SerializationException;
+
 import java.util.function.Consumer;
 
 public interface SelfDescribingBroadcastProcessor<TReq> {
 
     BroadcastDescriptor<TReq> getBroadcastDescriptor();
 
-    void handle(TReq request);
+    void handle(TReq request) throws SerializationException;
 
     /**
      * Static constructor
