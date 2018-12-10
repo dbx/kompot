@@ -110,6 +110,16 @@ public final class DefaultKeyNaming implements KeyNaming {
         return prefix + ":grs";
     }
 
+    @Override
+    public String statusHolderKey(String groupName, String identifier) {
+        return prefix + ":status:" + groupName + ":" + identifier;
+    }
+
+    @Override
+    public String statusResponseKey() {
+        return prefix + ":sr:" + UUID.randomUUID();
+    }
+
     private boolean isEmpty(String s) {
         return null == s || s.isEmpty();
     }
