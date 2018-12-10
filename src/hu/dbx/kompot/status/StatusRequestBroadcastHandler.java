@@ -17,12 +17,12 @@ import java.util.function.Supplier;
  * <p>
  * When received the module writes its status to the response key found in payload.
  */
-public class StatusRequestBroadcastHandler implements SelfDescribingBroadcastProcessor<Map<String, Object>> {
+public class StatusRequestBroadcastHandler implements SelfDescribingBroadcastProcessor<Map> {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    @SuppressWarnings("unchecked")
-    private static final BroadcastDescriptor<Map<String, Object>> DESCRIPTOR = BroadcastDescriptor.of("KMPT_SAY_HELLO", Map.class);
+    // @SuppressWarnings("unchecked")
+    private static final BroadcastDescriptor<Map> DESCRIPTOR = BroadcastDescriptor.of("KMPT_SAY_HELLO", Map.class);
 
     private final Supplier<StatusReport> statusReportFactory;
     private final ConsumerConfig config;
@@ -33,25 +33,27 @@ public class StatusRequestBroadcastHandler implements SelfDescribingBroadcastPro
     }
 
     @Override
-    public BroadcastDescriptor<Map<String, Object>> getBroadcastDescriptor() {
+    public BroadcastDescriptor<Map> getBroadcastDescriptor() {
         return DESCRIPTOR;
     }
 
     @Override
-    public void handle(Map<String, Object> request) throws SerializationException {
+    public void handle(Map request) {
         final String responseKey = (String) request.get("key");
         LOGGER.debug("Writing status to key {}", responseKey);
 
         assert (responseKey != null);
 
-
         final StatusReport status = statusReportFactory.get();
-        final String serialized = SerializeHelper.serializeObject(status);
 
         try (final Jedis jedis = config.getPool().getResource()) {
+            final String serialized = SerializeHelper.serializeObject(status);
+
             jedis.rpush(responseKey, serialized);
+        } catch (SerializationException e) {
+            throw new RuntimeException(e);
         }
-        
+
         LOGGER.debug("Successfully written status to key {}", responseKey);
     }
 }

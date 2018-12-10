@@ -22,6 +22,7 @@ import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
+import hu.dbx.kompot.impl.producer.ProducerConfig;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
@@ -39,6 +40,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -81,13 +83,17 @@ public final class CommunicationEndpoint {
     }
 
     private CommunicationEndpoint(JedisPool pool, EventGroupProvider groups, ConsumerIdentity serverIdentity, ProducerIdentity producerIdentity, ExecutorService executor) {
-        final ConsumerConfig config = new ConsumerConfig(executor, serverIdentity, pool, naming);
+
+        final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+        final ConsumerConfig consumerConfig = new ConsumerConfig(executor, scheduledExecutor, serverIdentity, pool, naming);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
-        this.consumer = new ConsumerImpl(config, handlers);
-        this.producer = new ProducerImpl(pool, groups, naming, this.consumer, producerIdentity);
+        final ProducerConfig producerConfig = new ProducerConfig(executor, scheduledExecutor, pool, naming, producerIdentity);
 
-        registerBroadcastProcessor(new StatusRequestBroadcastHandler(this::findLocalStatusReport, config));
+        this.consumer = new ConsumerImpl(consumerConfig, handlers);
+        this.producer = new ProducerImpl(producerConfig, groups, this.consumer);
+
+        registerBroadcastProcessor(new StatusRequestBroadcastHandler(this::findLocalStatusReport, consumerConfig));
     }
 
     /**
