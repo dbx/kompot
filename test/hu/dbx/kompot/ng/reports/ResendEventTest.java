@@ -149,7 +149,7 @@ public class ResendEventTest {
             producer.registerEventSendingCallback(frame -> sentEventUuid.set(frame.getIdentifier()));
             producer.start();
             producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
-
+            producer.stop();
             return this;
         }
     }

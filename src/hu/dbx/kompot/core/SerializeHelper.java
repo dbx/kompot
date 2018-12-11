@@ -12,6 +12,7 @@ import hu.dbx.kompot.consumer.sync.MethodDescriptorResolver;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.status.StatusReport;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
@@ -63,8 +64,17 @@ public final class SerializeHelper {
         try {
             //noinspection unchecked
             return (Map<String, Object>) (getObjectMapper().readValue(str, Map.class));
-        } catch (IOException e) {
+        } catch (Throwable e) {
             throw new DeserializationException(str, "Could not deserialize Map", e);
+        }
+    }
+
+    public static StatusReport deserializeStatus(String str) throws DeserializationException {
+        try {
+            //noinspection unchecked
+            return (getObjectMapper().readValue(str, StatusReport.class));
+        } catch (IOException e) {
+            throw new DeserializationException(str, "Could not deserialize status report", e);
         }
     }
 
@@ -99,7 +109,7 @@ public final class SerializeHelper {
 
         try {
             return (getObjectMapper().readValue(content, targetClass));
-        } catch (IOException e) {
+        } catch (Exception e) {
             String message = "Could not deserialize payload for event " + eventName + ", class: " + targetClass;
             throw new DeserializationException(content, message, e);
         }
@@ -111,7 +121,7 @@ public final class SerializeHelper {
         try {
             //noinspection UnnecessaryParentheses,unchecked
             return (getObjectMapper().readValue(content, targetClass));
-        } catch (IOException e) {
+        } catch (Exception e) {
             String message = "Could not deserialize payload for method " + marker.getMethodName() + ", class: " + targetClass;
             throw new DeserializationException(content, message, e);
         }
@@ -129,7 +139,7 @@ public final class SerializeHelper {
         try {
             //noinspection unchecked
             return (getObjectMapper().readValue(content, targetClass));
-        } catch (IOException e) {
+        } catch (Exception e) {
             String message = "Could not deserialize payload for method " + methodName + " class: " + targetClass;
             throw new DeserializationException(content, message, e);
         }
@@ -145,7 +155,7 @@ public final class SerializeHelper {
 
         try {
             return (getObjectMapper().readValue(content, targetClass));
-        } catch (IOException e) {
+        } catch (Exception e) {
             String message = "Could not deserialize payload for broadcast " + broadcastCode + ", class: " + targetClass;
             throw new DeserializationException(content, message, e);
         }
@@ -155,7 +165,7 @@ public final class SerializeHelper {
         try {
             return getObjectMapper().writeValueAsString(object);
         } catch (JsonProcessingException e) {
-            throw new SerializationException(object, "Could not serialize any data");
+            throw new SerializationException(object, "Could not serialize any data", e);
         }
     }
 

@@ -11,6 +11,11 @@ public final class SerializationException extends Exception {
         this.source = source;
     }
 
+    public SerializationException(Object source, String message, Exception cause) {
+        super(message, cause);
+        this.source = source;
+    }
+
     public Object getSource() {
         return source;
     }
