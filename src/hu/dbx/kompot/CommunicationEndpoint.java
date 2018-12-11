@@ -18,18 +18,26 @@ import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.ConsumerImpl;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
+import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
+import hu.dbx.kompot.impl.producer.ProducerConfig;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
+import hu.dbx.kompot.status.StatusReport;
+import hu.dbx.kompot.status.StatusReporter;
+import hu.dbx.kompot.status.StatusReportingAction;
+import org.slf4j.Logger;
 import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -37,6 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 @SuppressWarnings("WeakerAccess")
 public final class CommunicationEndpoint {
+    private static final Logger LOGGER = LoggerUtils.getLogger();
 
     public static final int DEFAULT_EXECUTOR_THREADS = 12;
 
@@ -50,6 +59,7 @@ public final class CommunicationEndpoint {
     private final AtomicBoolean starting = new AtomicBoolean(false);
     private final AtomicBoolean started = new AtomicBoolean(false);
 
+    private final StatusReportingAction statusReportingAction;
 
     // TODO: make prefix configurable!
     private static final DefaultKeyNaming naming = DefaultKeyNaming.ofPrefix("moby");
@@ -69,11 +79,16 @@ public final class CommunicationEndpoint {
     }
 
     private CommunicationEndpoint(JedisPool pool, EventGroupProvider groups, ConsumerIdentity serverIdentity, ProducerIdentity producerIdentity, ExecutorService executor) {
-        final ConsumerConfig config = new ConsumerConfig(executor, serverIdentity, pool, naming);
+
+        final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+        final ConsumerConfig consumerConfig = new ConsumerConfig(executor, scheduledExecutor, serverIdentity, pool, naming);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
-        this.consumer = new ConsumerImpl(config, handlers);
-        this.producer = new ProducerImpl(pool, groups, naming, this.consumer, producerIdentity);
+        final ProducerConfig producerConfig = new ProducerConfig(executor, scheduledExecutor, pool, naming, producerIdentity);
+
+        this.consumer = new ConsumerImpl(consumerConfig, handlers);
+        this.producer = new ProducerImpl(producerConfig, groups, this.consumer);
+        this.statusReportingAction = new StatusReportingAction(consumer, this);
     }
 
     /**
@@ -127,11 +142,19 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException  ha eppen nem fut a komponensunk
      */
     public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data) throws SerializationException, IllegalStateException {
-        producer.sendEvent(event, data);
+        if (!started.get()) {
+            throw new RuntimeException("Can not send event when not yet started!");
+        } else {
+            producer.sendEvent(event, data);
+        }
     }
 
     public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data, MetaDataHolder metaData) throws SerializationException, IllegalStateException {
-        producer.sendEvent(event, data, metaData);
+        if (!started.get()) {
+            throw new RuntimeException("Can not send event when not yet started!");
+        } else {
+            producer.sendEvent(event, data, metaData);
+        }
     }
 
     /**
@@ -147,11 +170,19 @@ public final class CommunicationEndpoint {
      * @throws NullPointerException   when method argument is null.
      */
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data) throws SerializationException, IllegalStateException {
-        return producer.sendMessage(method, data);
+        if (!started.get()) {
+            throw new RuntimeException("Can not call method when not yet started!");
+        } else {
+            return producer.sendMessage(method, data);
+        }
     }
 
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data, MetaDataHolder metaDataHolder) throws SerializationException, IllegalStateException {
-        return producer.sendMessage(method, data, metaDataHolder);
+        if (!started.get()) {
+            throw new IllegalStateException("Can not call method when not yet started!");
+        } else {
+            return producer.sendMessage(method, data, metaDataHolder);
+        }
     }
 
 
@@ -232,6 +263,32 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException  ha eppen nem fut a komponens.
      */
     public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor, TReq data) throws SerializationException, IllegalStateException {
-        producer.broadcast(descriptor, data);
+        if (!started.get()) {
+            throw new IllegalStateException("Can not broadcast when not yet started!");
+        } else {
+            producer.broadcast(descriptor, data);
+        }
+    }
+
+    /**
+     * Adds a new system status reporting.
+     */
+    public void registerStatusReporter(final StatusReporter reporter) {
+        if (reporter == null) {
+            throw new IllegalArgumentException("Reporter should not be null!");
+        } else {
+            statusReportingAction.registerStatusReporter(reporter);
+        }
+    }
+
+    /**
+     * Returns a list of reports from all modules on the network including the current module.
+     */
+    public List<StatusReport> findGlobalStatuses() {
+        if (!started.get()) {
+            throw new IllegalStateException("Can not get global statuses when not yet started!");
+        } else {
+            return statusReportingAction.findGlobalStatuses();
+        }
     }
 }

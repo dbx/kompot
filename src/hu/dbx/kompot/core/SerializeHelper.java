@@ -12,6 +12,7 @@ import hu.dbx.kompot.consumer.sync.MethodDescriptorResolver;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.status.StatusReport;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
@@ -65,6 +66,15 @@ public final class SerializeHelper {
             return (Map<String, Object>) (getObjectMapper().readValue(str, Map.class));
         } catch (Throwable e) {
             throw new DeserializationException(str, "Could not deserialize Map", e);
+        }
+    }
+
+    public static StatusReport deserializeStatus(String str) throws DeserializationException {
+        try {
+            //noinspection unchecked
+            return (getObjectMapper().readValue(str, StatusReport.class));
+        } catch (IOException e) {
+            throw new DeserializationException(str, "Could not deserialize status report", e);
         }
     }
 
@@ -155,7 +165,7 @@ public final class SerializeHelper {
         try {
             return getObjectMapper().writeValueAsString(object);
         } catch (JsonProcessingException e) {
-            throw new SerializationException(object, "Could not serialize any data");
+            throw new SerializationException(object, "Could not serialize any data", e);
         }
     }
 

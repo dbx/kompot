@@ -14,6 +14,7 @@ import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
+import hu.dbx.kompot.status.SelfStatusWriter;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPubSub;
@@ -118,6 +119,10 @@ public final class ConsumerImpl implements Consumer, Runnable {
         LOGGER.debug("started daemon thread.");
         // csak azert noveljuk, mert az after event runnable csokkenteni fogja!
         processingEvents.incrementAndGet();
+
+        // ez fogja a modul statuszat rendszeresen beleirni.
+        SelfStatusWriter.start(consumerConfig);
+
         submitToExecutorTrampoline(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks));
     }
 
@@ -314,5 +319,9 @@ public final class ConsumerImpl implements Consumer, Runnable {
         } else {
             eventReceivingCallbacks.remove(callback);
         }
+    }
+
+    public ConsumerConfig getConsumerConfig() {
+        return consumerConfig;
     }
 }

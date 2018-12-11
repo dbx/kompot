@@ -84,4 +84,14 @@ public interface KeyNaming {
      * @throws NullPointerException when method uuid is null
      */
     String eventGroupsKey();
+
+    /**
+     * Heartbeat info of a module is written here.
+     */
+    String statusHolderKey(String groupName, String identifier);
+
+    /**
+     * Detailed status of a module is written here.
+     */
+    String statusResponseKey();
 }

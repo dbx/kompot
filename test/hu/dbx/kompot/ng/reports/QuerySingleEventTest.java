@@ -60,6 +60,7 @@ public class QuerySingleEventTest {
         producer.registerEventSendingCallback(frame -> sentEventUuid[0] = frame.getIdentifier());
         producer.start();
         producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
+        producer.stop();
 
         assertNotNull(sentEventUuid[0]);
 
@@ -95,6 +96,7 @@ public class QuerySingleEventTest {
         producer.registerEventSendingCallback(frame -> sentEventUuid.set(frame.getIdentifier()));
         producer.start();
         producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
+        producer.stop();
 
         Thread.sleep(100);
         assertNotNull(sentEventUuid.get());
@@ -126,5 +128,6 @@ public class QuerySingleEventTest {
             assertTrue(eventGroupDataOpt.isPresent());
             assertEquals(DataHandling.Statuses.PROCESSED, eventGroupDataOpt.get().getStatus());
         }
+        consumer.stop();
     }
 }

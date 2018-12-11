@@ -1,37 +1,33 @@
-package hu.dbx.kompot.impl.consumer;
+package hu.dbx.kompot.impl.producer;
 
-import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.producer.ProducerIdentity;
 import redis.clients.jedis.JedisPool;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
 /**
- * Egy consumer rendszerszintu konfiguraciojat tartalmazza.
+ * Configuration of a Producer object.
  */
-public final class ConsumerConfig {
+public final class ProducerConfig {
 
     private final Executor executor;
     private final ScheduledExecutorService scheduledExecutor;
-    private final ConsumerIdentity identity;
     private final JedisPool pool;
     private final KeyNaming naming;
+    private final ProducerIdentity producerIdentity;
 
-    public ConsumerConfig(Executor executor, ScheduledExecutorService scheduledExecutor, ConsumerIdentity consumerIdentity, JedisPool jedisPool, KeyNaming keyNaming) {
+    public ProducerConfig(Executor executor, ScheduledExecutorService scheduledExecutor, JedisPool jedisPool, KeyNaming keyNaming, ProducerIdentity producerIdentity) {
         this.executor = executor;
         this.scheduledExecutor = scheduledExecutor;
-        this.identity = consumerIdentity;
         this.pool = jedisPool;
         this.naming = keyNaming;
+        this.producerIdentity = producerIdentity;
     }
 
     public Executor getExecutor() {
         return executor;
-    }
-
-    public ConsumerIdentity getConsumerIdentity() {
-        return identity;
     }
 
     public JedisPool getPool() {
@@ -44,5 +40,9 @@ public final class ConsumerConfig {
 
     public ScheduledExecutorService getScheduledExecutor() {
         return scheduledExecutor;
+    }
+
+    public ProducerIdentity getProducerIdentity() {
+        return producerIdentity;
     }
 }
