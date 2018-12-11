@@ -61,8 +61,9 @@ public class QueryEventGroups {
 
         producer.asyncSendEvent(EVENT_2, singletonMap("bb", 1));
 
-        assertEquals(2, reporting.listAllEventGroups().size());
+        producer.stop();
 
+        assertEquals(2, reporting.listAllEventGroups().size());
 
         //TODO: itt miért event neveket látok csoportok helyett?
 
