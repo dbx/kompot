@@ -36,7 +36,7 @@ public class StatusReportTest {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), consumerIdentity, executor);
 
-        consumer.registerStatusReporter(new StatusReporter("short", "long descr", StatusReporter.StatusResult::resultOk));
+        consumer.registerStatusReporter(new StatusReporter("short", "long descr", () -> StatusReporter.StatusResult.success("status_msg")));
 
         consumer.start();
 
@@ -56,6 +56,7 @@ public class StatusReportTest {
 
         assertEquals("short", statuses.get(0).getItems().get(0).getName());
         assertTrue(statuses.get(0).getItems().get(0).isOk());
+        assertEquals("status_msg", statuses.get(0).getItems().get(0).getStatusMessage());
 
         // TODO: legyen olyan teszt is, hogy masik modul statuszat is megtalaljuk.
 

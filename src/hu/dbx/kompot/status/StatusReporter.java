@@ -36,21 +36,34 @@ public class StatusReporter {
     }
 
 
-
     public static final class StatusResult {
 
         private final String errorMessage;
 
-        private StatusResult(String errorMessage) {
+        private final String statusMessage;
+
+        private StatusResult(String errorMessage, String statusMessage) {
             this.errorMessage = errorMessage;
+            this.statusMessage = statusMessage;
         }
 
-        public static StatusResult resultOk() {
-            return new StatusResult(null);
+        public static StatusResult success() {
+            return new StatusResult(null, null);
         }
 
-        public static StatusResult resultError(String errorMsg) {
-            return new StatusResult(errorMsg);
+        public static StatusResult error(String errorMsg) {
+            return new StatusResult(errorMsg, null);
+        }
+
+        public static StatusResult success(String statusMessage) {
+            return new StatusResult(null, statusMessage);
+        }
+
+        /**
+         * Other message to be reported
+         */
+        public String getStatusMessage() {
+            return statusMessage;
         }
 
         /**

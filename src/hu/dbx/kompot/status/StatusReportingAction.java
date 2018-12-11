@@ -55,9 +55,9 @@ public class StatusReportingAction {
                 statusResult = statusReporter.getEndpoint().call();
             } catch (Exception e) {
                 LOGGER.error("Error caught while calling statusReporter " + statusReporter, e);
-                statusResult = StatusReporter.StatusResult.resultError(e.getMessage());
+                statusResult = StatusReporter.StatusResult.error(e.getMessage());
             }
-            result.add(new StatusItemImpl(statusReporter.getName(), statusReporter.getDescription(), statusResult.getErrorMessage()));
+            result.add(new StatusItemImpl(statusReporter.getName(), statusReporter.getDescription(), statusResult.getStatusMessage(), statusResult.getErrorMessage()));
         }
         return result;
     }

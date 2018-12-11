@@ -118,8 +118,9 @@ public final class StatusReport {
                 @JsonProperty("name") String name,
                 @JsonProperty("description") String description,
                 @JsonProperty("errorMessage") String errorMessage,
+                @JsonProperty("statusMessage") String statusMessage,
                 @JsonProperty("ok") boolean ok) {
-            return new StatusItemImpl(name, description, ok ? null : errorMessage);
+            return new StatusItemImpl(name, description, statusMessage, ok ? null : errorMessage);
         }
 
         /**
@@ -131,6 +132,11 @@ public final class StatusReport {
          * Short description of the status report.
          */
         String getDescription();
+
+        /**
+         * Detailed description of the actual status
+         */
+        String getStatusMessage();
 
         /**
          * Error description used if status is not ok
