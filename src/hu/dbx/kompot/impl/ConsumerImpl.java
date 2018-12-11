@@ -128,6 +128,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
     public void shutdown() {
         pubSub.unsubscribe();
+        SelfStatusWriter.delete(consumerConfig);
     }
 
     @Override

@@ -27,10 +27,7 @@ public class SelfStatusWriter implements Runnable {
      */
     @Override
     public void run() {
-
-        final String group = consumerConfig.getConsumerIdentity().getEventGroup();
-        final String id = consumerConfig.getConsumerIdentity().getIdentifier();
-        final String key = consumerConfig.getNaming().statusHolderKey(group, id);
+        final String key = heartbeatKey();
         final String time = new Date().toString();
 
         try (final Jedis jedis = consumerConfig.getPool().getResource()) {
@@ -40,6 +37,24 @@ public class SelfStatusWriter implements Runnable {
             tr.hset(key, "time", time); // TODO: create some date utility.
             tr.exec();
         }
+    }
+
+    /**
+     * Deletes its heartbeat key
+     */
+    public static void delete(ConsumerConfig config) {
+        final SelfStatusWriter writer = new SelfStatusWriter(config);
+        final String key = writer.heartbeatKey();
+
+        try (final Jedis jedis = config.getPool().getResource()) {
+            jedis.del(key); // remove timeout now
+        }
+    }
+
+    private String heartbeatKey() {
+        final String group = consumerConfig.getConsumerIdentity().getEventGroup();
+        final String id = consumerConfig.getConsumerIdentity().getIdentifier();
+        return consumerConfig.getNaming().statusHolderKey(group, id);
     }
 
     public static Set<String> findStatusKeys(Jedis jedis, KeyNaming keyNaming) {
