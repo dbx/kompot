@@ -91,8 +91,14 @@ public class StatusReportingAction {
             // wait for responses from all modules.
             final List<StatusReport> reports = new ArrayList<>(moduleCount);
             for (int i = 0; i < moduleCount; i++) {
-                final String response = jedis.blpop(newKey, "5").get(1); // TODO: wait with timeout here.
-                reports.add(SerializeHelper.deserializeStatus(response));
+                List<String> popped = jedis.blpop(newKey, "5");
+                if (popped != null) {
+                    final String response = popped.get(1);
+                    reports.add(SerializeHelper.deserializeStatus(response));
+                } else {
+                    // timeout happened
+                    break;
+                }
             }
             return reports;
 
