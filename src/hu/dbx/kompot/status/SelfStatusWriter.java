@@ -3,9 +3,12 @@ package hu.dbx.kompot.status;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Transaction;
 
 import java.util.Date;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -57,9 +60,24 @@ public class SelfStatusWriter implements Runnable {
         return consumerConfig.getNaming().statusHolderKey(group, id);
     }
 
-    public static Set<String> findStatusKeys(Jedis jedis, KeyNaming keyNaming) {
+    /**
+     * Returns a set of all module status keys.
+     */
+    static Set<String> findStatusKeys(Jedis jedis, KeyNaming keyNaming) {
+        final Set<String> statusKeys = new HashSet<>();
         final String pattern = keyNaming.statusHolderKey("*", "*");
-        return jedis.keys(pattern);
+
+        ScanResult<String> result;
+        String cursor = "0";
+
+        do {
+            result = jedis.scan(cursor, new ScanParams().match(pattern).count(256));
+            cursor = result.getCursor();
+
+            statusKeys.addAll(result.getResult());
+        } while (!result.isCompleteIteration());
+
+        return statusKeys;
     }
 
     /**
