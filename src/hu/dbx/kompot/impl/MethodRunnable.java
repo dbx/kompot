@@ -167,7 +167,9 @@ final class MethodRunnable implements Runnable {
         final Transaction tx = store.multi();
         tx.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), "ERROR");
         tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_CLASS.name(), t.getClass().getName());
-        tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE.name(), t.getMessage());
+        if (t.getMessage() != null) {
+            tx.hset(methodKey, DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE.name(), t.getMessage());
+        }
         tx.exec();
     }
 }
