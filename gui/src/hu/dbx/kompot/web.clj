@@ -10,6 +10,7 @@
 (defhtml wrap-html [contents]
   [:html
    [:head
+    [:meta {:charset "UTF-8"}]
     [:link {:rel :stylesheet
             :href "https://jenil.github.io/bulmaswatch/litera/bulmaswatch.min.css"}]
     [:link {:rel :stylesheet
@@ -22,10 +23,15 @@
   [:div {:style "padding: 2em 0;"}
    [:div.tabs.is-toggle.is-centered.is-small
     [:ul
-     [:li.is-active [:a {:href "/events"} [:span "Events"]]]
-     [:li [:a {:href "/messages"} [:span "Messages"]]]
-     [:li [:a {:href "/broadcasts"} [:span "Broadcasts"]]]
-     [:li [:a {:href "/statuses"} [:span "Statuses"]]]]]])
+     (letfn [(item [url title]
+               [:li (when (.endsWith (str (:uri erdos.routing/*request*)) (str url))
+                      {:class "is-active"})
+                [:a {:href url} [:span title]]])]
+       (list
+        (item "/events" "Events")
+        (item "/messages" "Messages")
+        (item "/broadcasts" "Broadcasts")
+        (item "/statuses" "Statuses")))]]])
 
 (def status-style {"processing" "background:hsl(48, 100%, 67%)"
                    "failed"     "background:hsl(348, 80%, 81%)"})

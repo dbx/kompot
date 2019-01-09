@@ -3,11 +3,11 @@
             [org.httpkit.server :refer [run-server]]
             [hiccup.def :refer [defhtml]]
             [hu.dbx.kompot.web :as web]
-            [hu.dbx.kompot.ui.events]
-            [hu.dbx.kompot.ui.event-details]
-            [hu.dbx.kompot.ui.event-history]
             [hu.dbx.kompot.common :refer :all]
-            [erdos.routing :refer [defreq]]))
+            [erdos.routing :refer [defreq]]
+            [erdos.require-all :refer [require-all]]))
+
+(require-all hu.dbx.kompot.ui)
 
 (set! *warn-on-reflection* true)
 
