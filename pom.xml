@@ -5,7 +5,7 @@
     <groupId>hu.dbx</groupId>
     <artifactId>kompot</artifactId>
     <packaging>jar</packaging>
-    <version>0.1.31</version>
+    <version>0.1.32</version>
     <name>kompot</name>
     <description>Message queuing for human use.</description>
     <build>
@@ -38,6 +38,11 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.0.2</version>
+            </plugin>
         </plugins>
     </build>
     <dependencies>
@@ -62,7 +67,7 @@
         <dependency>
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>
-            <version>3.0.0-rc1</version>
+            <version>3.0.1</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
