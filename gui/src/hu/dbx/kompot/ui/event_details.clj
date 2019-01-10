@@ -11,42 +11,57 @@
 
 (set! *warn-on-reflection* true)
 
+(def processing-not-started
+  [:div.notification.is-warning
+   [:p.has-text-centered [:b "Event processing has not been started (yet)!"]]])
+
+(defn- render-exception [exc]
+  [:div
+   [:h6.subtitle "An exception occured:"]
+   [:pre (str exc)]])
+
+(defn- render-message [msg]
+  [:div
+   [:h6.subtitle "Message:"]
+   [:pre (str msg)]])
+
+(defn- render-history-item [row]
+  (let [msg (get row "message")
+        exc (get row "exception")]
+    (list
+     [:tr {:style (status-style (get row "status"))}
+      [:td (get row "time")]
+      [:td (render-client-id (get row "handler"))]
+      [:td (render-status-tag (get row "status"))]]
+     (when (or msg exc)
+       [:tr [:td [:div]]
+        [:td {:colspan 2}
+         (when (seq exc)
+           (render-exception exc))
+         (when (seq msg)
+           (render-message msg))]]))))
+
 (defhtml details-group [details uuid group]
   (assert (uuid? uuid))
   (assert (string? group))
-  #_(let [history (seq (.getEventHistory Reporting uuid group))]
-    [:section.section
-     [:div.card {:style "box-shadow: 0 2px 6px silver"}
-      [:header.card-header
-       [:p.card-header-title
-        [:span "Processing group " [:big [:code [:b group]]]]]]
-      [:div.card-content
-       [:div
-        (if (empty? history)
-          [:div.notification.is-warning
-           [:p.has-text-centered [:b "Event processing has not been started (yet)!"]]]
-          [:table.table.is-narrow.is-fullwidth.is-bordered
-           [:thead [:tr [:th {:style "width: 96px"} "Time"] [:th "Client"] [:th "Status"]]]
-           [:tbody (for [row (reverse history)
-                         :let [msg (get row "message")
-                               exc (get row "exception")]]
-                     (list
-                      [:tr {:style (status-style (get row "status"))}
-                       [:td (get row "time")]
-                       [:td (render-client-id (get row "handler"))]
-                       [:td (render-status-tag (get row "status"))]]
-                      (when (or msg exc)
-                        [:tr [:td [:div]]
-                         [:td {:colspan 2}
-                          (when (seq exc)
-                            [:div
-                             [:h6.subtitle "An exception occured:"]
-                             [:pre (str exc)]])
-                          (when (seq msg)
-                            [:div
-                             [:h6.subtitle "Message:"]
-                             [:pre (str msg)]])]])))]])]
-       [:div]]]]))
+  (let [evt (.querySingleEvent Reporting (str group) uuid)]
+    (if (.isPresent evt)
+      (let [evt (.get evt)
+            history (vec (.getHistory evt))]
+        [:section.section
+         [:div.card {:style "box-shadow: 0 2px 6px silver"}
+          [:header.card-header
+           [:p.card-header-title
+            [:span "Processing group " [:big [:code [:b group]]]]]]
+          [:div.card-content
+           [:div
+            (if (empty? history)
+              processing-not-started
+              [:table.table.is-narrow.is-fullwidth.is-bordered
+               [:thead [:tr [:th {:style "width: 96px"} "Time"] [:th "Client"] [:th "Status"]]]
+               [:tbody (for [row (reverse history)] (render-history-item row))]])]
+           [:div]]]])
+      [:i "Details not found for event processor " [:b group]])))
 
 (defhtml app-event [uuid]
   (wrap-html
@@ -55,9 +70,7 @@
      [:a.button {:href "/events"} "Back to events"]]
     [:h1.title.has-text-centered "Async event history"]
     (let [{:keys [eventType sender firstSent groups data] :as details}
-          (bean (.get (.queryEventData Reporting uuid)))
-
-          ]
+          (bean (.get (.queryEventData Reporting uuid)))]
       [:div
        [:div.columns
         [:div.column
