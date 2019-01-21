@@ -16,9 +16,9 @@ import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.impl.BlockingLifecycle;
 import hu.dbx.kompot.impl.ConsumerImpl;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
-import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
@@ -29,7 +29,6 @@ import hu.dbx.kompot.producer.ProducerIdentity;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
 import hu.dbx.kompot.status.StatusReportingAction;
-import org.slf4j.Logger;
 import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
@@ -38,14 +37,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Use this component as a simplified interface to access library functionality.
  */
 @SuppressWarnings("WeakerAccess")
 public final class CommunicationEndpoint {
-    private static final Logger LOGGER = LoggerUtils.getLogger();
 
     public static final int DEFAULT_EXECUTOR_THREADS = 12;
 
@@ -56,8 +53,7 @@ public final class CommunicationEndpoint {
     private final ProducerImpl producer;
     private final ConsumerImpl consumer;
 
-    private final AtomicBoolean starting = new AtomicBoolean(false);
-    private final AtomicBoolean started = new AtomicBoolean(false);
+    private final BlockingLifecycle lifecycle = new BlockingLifecycle();
 
     private final StatusReportingAction statusReportingAction;
 
@@ -97,16 +93,10 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException When already started.
      */
     public void start() throws IllegalStateException {
-        if (starting.compareAndSet(false, true)) {
-            try {
-                consumer.startDaemonThread();
-                started.set(true);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            throw new IllegalStateException("Method start() has already been called.");
-        }
+        lifecycle.starting(() -> {
+            consumer.startDaemonThread();
+            return null;
+        });
     }
 
     /**
@@ -115,21 +105,17 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException if component is not running already.
      */
     public void stop() throws IllegalStateException {
-        if (started.compareAndSet(true, false)) {
+        lifecycle.stopping(() -> {
             consumer.shutdown();
             producer.shutdown();
-            // throw new IllegalStateException("Nincs implementalva!");
-            starting.set(false);
-        } else {
-            throw new IllegalStateException("Method start() has not yet been called.");
-        }
+        });
     }
 
     /**
      * Returns true iff component is up and running.
      */
     public boolean isRunning() {
-        return started.get();
+        return lifecycle.isRunning();
     }
 
     /**
@@ -142,19 +128,11 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException  ha eppen nem fut a komponensunk
      */
     public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data) throws SerializationException, IllegalStateException {
-        if (!started.get()) {
-            throw new RuntimeException("Can not send event when not yet started!");
-        } else {
-            producer.sendEvent(event, data);
-        }
+        lifecycle.doWhenRunningThrows(() -> producer.sendEvent(event, data));
     }
 
     public <TReq> void asyncSendEvent(EventDescriptor<TReq> event, TReq data, MetaDataHolder metaData) throws SerializationException, IllegalStateException {
-        if (!started.get()) {
-            throw new RuntimeException("Can not send event when not yet started!");
-        } else {
-            producer.sendEvent(event, data, metaData);
-        }
+        lifecycle.doWhenRunningThrows(() -> producer.sendEvent(event, data, metaData));
     }
 
     /**
@@ -170,21 +148,12 @@ public final class CommunicationEndpoint {
      * @throws NullPointerException   when method argument is null.
      */
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data) throws SerializationException, IllegalStateException {
-        if (!started.get()) {
-            throw new RuntimeException("Can not call method when not yet started!");
-        } else {
-            return producer.sendMessage(method, data);
-        }
+        return lifecycle.doWhenRunningThrows(() -> producer.sendMessage(method, data));
     }
 
     public <TReq, TRes> CompletableFuture<TRes> syncCallMethod(MethodDescriptor<TReq, TRes> method, TReq data, MetaDataHolder metaDataHolder) throws SerializationException, IllegalStateException {
-        if (!started.get()) {
-            throw new IllegalStateException("Can not call method when not yet started!");
-        } else {
-            return producer.sendMessage(method, data, metaDataHolder);
-        }
+        return lifecycle.doWhenRunningThrows(() -> producer.sendMessage(method, data, metaDataHolder));
     }
-
 
     /**
      * Registers callback that is called to follow up on the lifecycle of sending a method call.
@@ -193,7 +162,7 @@ public final class CommunicationEndpoint {
      * @throws IllegalArgumentException on null parameter
      */
     public void registerMethodSendingCallback(MethodSendingCallback eventListener) throws IllegalArgumentException {
-        producer.addMethodSendingCallback(eventListener);
+        lifecycle.doBeforeStarted(() -> producer.addMethodSendingCallback(eventListener));
     }
 
     /**
@@ -203,7 +172,7 @@ public final class CommunicationEndpoint {
      * @throws IllegalArgumentException on null parameter
      */
     public void registerMethodReceivingCallback(MethodReceivingCallback eventListener) throws IllegalArgumentException {
-        consumer.addMethodReceivingCallback(eventListener);
+        lifecycle.doBeforeStarted(() -> consumer.addMethodReceivingCallback(eventListener));
     }
 
     /**
@@ -215,7 +184,7 @@ public final class CommunicationEndpoint {
      * @throws IllegalArgumentException on null parameter
      */
     public void registerEventReceivingCallback(EventReceivingCallback callback) throws IllegalArgumentException {
-        consumer.addEventReceivingCallback(callback);
+        lifecycle.doBeforeStarted(() -> consumer.addEventReceivingCallback(callback));
     }
 
     /**
@@ -225,7 +194,7 @@ public final class CommunicationEndpoint {
      * @throws IllegalArgumentException on null parameter
      */
     public void registerEventSendingCallback(EventSendingCallback eventListener) throws IllegalArgumentException {
-        producer.addEventSendingCallback(eventListener);
+        lifecycle.doBeforeStarted(() -> producer.addEventSendingCallback(eventListener));
     }
 
     /**
@@ -234,26 +203,22 @@ public final class CommunicationEndpoint {
      * @param factory not null.
      */
     public void registerEventHandlers(EventProcessorFactory factory) {
-        events.register(factory);
+        lifecycle.doBeforeStarted(() -> events.register(factory));
     }
 
     public void registerEventHandler(SelfDescribingEventProcessor adapter) {
-        events.register(adapter);
+        lifecycle.doBeforeStarted(() -> events.register(adapter));
     }
 
     public void registerMethodProcessor(SelfDescribingMethodProcessor methodProcessor) {
-        methods.register(methodProcessor);
+        lifecycle.doBeforeStarted(() -> methods.register(methodProcessor));
     }
 
     /**
      * Felregisztral egy esemenykezelot arra az esetre, ha broadcast uzenetet kapunk
      */
     public void registerBroadcastProcessor(SelfDescribingBroadcastProcessor broadcastProcessor) {
-        if (starting.get()) {
-            throw new IllegalStateException("Process has already been started!");
-        } else {
-            broadcasts.register(broadcastProcessor);
-        }
+        lifecycle.doBeforeStarted(() -> broadcasts.register(broadcastProcessor));
     }
 
     /**
@@ -263,11 +228,7 @@ public final class CommunicationEndpoint {
      * @throws IllegalStateException  ha eppen nem fut a komponens.
      */
     public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor, TReq data) throws SerializationException, IllegalStateException {
-        if (!started.get()) {
-            throw new IllegalStateException("Can not broadcast when not yet started!");
-        } else {
-            producer.broadcast(descriptor, data);
-        }
+        lifecycle.doWhenRunningThrows(() -> producer.broadcast(descriptor, data));
     }
 
     /**
@@ -284,11 +245,7 @@ public final class CommunicationEndpoint {
     /**
      * Returns a list of reports from all modules on the network including the current module.
      */
-    public List<StatusReport> findGlobalStatuses() {
-        if (!started.get()) {
-            throw new IllegalStateException("Can not get global statuses when not yet started!");
-        } else {
-            return statusReportingAction.findGlobalStatuses();
-        }
+    public List<StatusReport> findGlobalStatuses() throws IllegalStateException {
+        return lifecycle.doWhenRunningGet(statusReportingAction::findGlobalStatuses);
     }
 }

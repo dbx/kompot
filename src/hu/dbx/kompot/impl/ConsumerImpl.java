@@ -69,6 +69,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
     }
 
     private final CountDownLatch startLatch = new CountDownLatch(1);
+    private final CountDownLatch stopLatch = new CountDownLatch(1);
 
     private final Thread daemonThread = new Thread(this);
 
@@ -78,6 +79,15 @@ public final class ConsumerImpl implements Consumer, Runnable {
         public void onSubscribe(String channel, int subscribedChannels) {
             if (channel.startsWith("id:")) {
                 startLatch.countDown();
+            }
+        }
+
+        @Override
+        public void onUnsubscribe(String channel, int subscribedChannels) {
+            if (0 == subscribedChannels) {
+                SelfStatusWriter.delete(consumerConfig);
+
+                stopLatch.countDown();
             }
         }
 
@@ -127,8 +137,12 @@ public final class ConsumerImpl implements Consumer, Runnable {
     }
 
     public void shutdown() {
-        pubSub.unsubscribe();
-        SelfStatusWriter.delete(consumerConfig);
+        try {
+            pubSub.unsubscribe();
+            stopLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -182,13 +196,16 @@ public final class ConsumerImpl implements Consumer, Runnable {
         try (Jedis jedis = consumerConfig.getPool().getResource()) {
             LOGGER.info("Subscribing to pubsub channels: {} on {}", getPubSubChannels(), getConsumerIdentity().getIdentifier());
 
+            // ez blokkol!
             jedis.subscribe(pubSub, getPubSubChannels());
+
             // TODO: ezt a szalat is le kell tudni allitani!!!
             LOGGER.info("Exiting pubsub listener thread of {}", getConsumerIdentity().getIdentifier());
         } catch (Throwable e) {
             LOGGER.error("Exception on pubsub listener thread of " + getConsumerIdentity().getIdentifier(), e);
         } finally {
             LOGGER.info("Quitting pubsub listener thread of {}", getConsumerIdentity().getIdentifier());
+            // Jedis instance has been returned to the pool!
         }
     }
 

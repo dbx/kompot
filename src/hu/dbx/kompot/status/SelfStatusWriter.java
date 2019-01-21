@@ -46,8 +46,7 @@ public class SelfStatusWriter implements Runnable {
      * Deletes its heartbeat key
      */
     public static void delete(ConsumerConfig config) {
-        final SelfStatusWriter writer = new SelfStatusWriter(config);
-        final String key = writer.heartbeatKey();
+        final String key = new SelfStatusWriter(config).heartbeatKey();
 
         try (final Jedis jedis = config.getPool().getResource()) {
             jedis.del(key); // remove timeout now

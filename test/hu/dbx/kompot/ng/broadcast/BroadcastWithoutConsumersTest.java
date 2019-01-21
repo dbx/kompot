@@ -30,7 +30,7 @@ public class BroadcastWithoutConsumersTest {
     public TestRedis redis = TestRedis.build();
 
     @Test
-    public void testEventsAreUnhandled() throws SerializationException {
+    public void testEventsAreUnhandled() {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), serverIdentity, executor);
