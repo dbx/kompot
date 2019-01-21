@@ -93,7 +93,7 @@ public class ClearProcessedEventsTest {
         }));
         consumer.start();
 
-        Thread.sleep(1000);
+        Thread.sleep(2000);
 
         try {
             {
