@@ -77,6 +77,9 @@ public class StatusReportingAction {
 
     public List<StatusReport> findGlobalStatuses() {
 
+        // wait for one module.
+        final int MODULE_TIMEOUT_SECS = 10;
+
         try (Jedis jedis = consumer.getConsumerConfig().getPool().getResource()) {
             final Set<String> ks = SelfStatusWriter.findStatusKeys(jedis, consumer.getKeyNaming());
             final int moduleCount = ks.size(); // ennyi darab modul fut osszesen
@@ -91,7 +94,7 @@ public class StatusReportingAction {
             // wait for responses from all modules.
             final List<StatusReport> reports = new ArrayList<>(moduleCount);
             for (int i = 0; i < moduleCount; i++) {
-                List<String> popped = jedis.blpop(newKey, "5");
+                List<String> popped = jedis.blpop(MODULE_TIMEOUT_SECS, newKey);
                 if (popped != null) {
                     final String response = popped.get(1);
                     reports.add(SerializeHelper.deserializeStatus(response));
