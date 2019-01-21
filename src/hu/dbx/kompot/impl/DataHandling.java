@@ -17,9 +17,12 @@ import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.StreamSupport;
+import java.util.zip.GZIPInputStream;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
 import static java.lang.String.join;
@@ -41,6 +44,11 @@ public final class DataHandling {
          * Serialized event data
          */
         DATA,
+
+        /**
+         * Compressed serialized event data.
+         */
+        DATA_ZIP,
 
         /**
          * Comma separated list of event names
@@ -170,7 +178,7 @@ public final class DataHandling {
      * @param eventUuid     event identifier
      * @return read frame - not null
      * @throws DeserializationException on deserialization error
-     * @throws IllegalStateException when no event descriptor is found for evt type
+     * @throws IllegalStateException    when no event descriptor is found for evt type
      * @throws IllegalArgumentException could not find event data in redis
      */
     @SuppressWarnings("unchecked")
@@ -180,14 +188,28 @@ public final class DataHandling {
         LOGGER.debug("Loading event details under key {}", eventDetailsKey);
 
         final String eventName = jedis.hget(eventDetailsKey, CODE.name());
+
         final String eventData = jedis.hget(eventDetailsKey, DATA.name());
+        final byte[] eventDataZip = jedis.hget(eventDetailsKey.getBytes(), DATA_ZIP.name().getBytes());
 
         if (eventName == null) {
             throw new IllegalArgumentException("Empty event name for eventUuid=" + eventUuid);
         }
 
         // this call might throw IllegalArgumentException
-        final Object eventDataObj = SerializeHelper.deserializeContentOnly(eventName, eventData, eventResolver);
+        final Object eventDataObj;
+
+        if (eventData != null) {
+            eventDataObj = SerializeHelper.deserializeContentOnly(eventName, eventData, eventResolver);
+        } else {
+            try (ByteArrayInputStream input = new ByteArrayInputStream(eventDataZip);
+                 GZIPInputStream iz = new GZIPInputStream(input)) {
+                eventDataObj = SerializeHelper.deserializeContentOnly(eventName, iz, eventResolver);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         final Optional<EventDescriptor> eventMarker = eventResolver.resolveMarker(eventName);
 
         if (!eventMarker.isPresent()) {
