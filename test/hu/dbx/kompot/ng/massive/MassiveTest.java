@@ -10,6 +10,7 @@ import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.producer.EventGroupProvider;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;
@@ -29,6 +30,7 @@ public class MassiveTest {
     public static final int AGENT_COUNT = 10, EVENT_COUNT = 100, MESSAGE_COUNT = 100, BROADCAST_COUNT = 100;
 
 
+    @Ignore
     @Test
     public void test() throws InterruptedException {
 

@@ -11,13 +11,12 @@ import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
+import hu.dbx.kompot.core.ThreadSafePubSub;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import hu.dbx.kompot.status.SelfStatusWriter;
 import org.slf4j.Logger;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPubSub;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -26,7 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class ConsumerImpl implements Consumer, Runnable {
+public final class ConsumerImpl implements Consumer {
 
     /**
      * Maximum number of event processing threads.
@@ -53,9 +52,12 @@ public final class ConsumerImpl implements Consumer, Runnable {
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
         this.consumerHandlers = consumerHandlers;
+        this.pubSub = new ThreadSafePubSub(consumerConfig.getPool(), this.pubSubListener);
     }
 
     private final Map<UUID, Runnable> futures = new ConcurrentHashMap<>();
+
+    private final ThreadSafePubSub pubSub;
 
     /**
      * Felregisztral egy future peldanyt es var a valaszra.
@@ -64,16 +66,14 @@ public final class ConsumerImpl implements Consumer, Runnable {
     void registerMessageFuture(UUID messageUuid, Runnable runnable) {
         String messageResponseChannel = consumerConfig.getNaming().getMessageResponseNotificationChannel(messageUuid);
         LOGGER.debug("Subscribing to {}", messageResponseChannel);
-        pubSub.subscribe(messageResponseChannel);
         futures.put(messageUuid, runnable);
+        pubSub.subscribeForOnce(messageResponseChannel);
     }
 
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
 
-    private final Thread daemonThread = new Thread(this);
-
-    private final JedisPubSub pubSub = new JedisPubSub() {
+    private final ThreadSafePubSub.Listener pubSubListener = new ThreadSafePubSub.Listener() {
 
         @Override
         public void onSubscribe(String channel, int subscribedChannels) {
@@ -85,7 +85,7 @@ public final class ConsumerImpl implements Consumer, Runnable {
         @Override
         public void onUnsubscribe(String channel, int subscribedChannels) {
             if (0 == subscribedChannels) {
-                SelfStatusWriter.delete(consumerConfig);
+//                SelfStatusWriter.delete(consumerConfig);
 
                 stopLatch.countDown();
             }
@@ -122,7 +122,8 @@ public final class ConsumerImpl implements Consumer, Runnable {
     // TODO: how to stop it when undeployed?
     // TODO: do not use threading here.
     public void startDaemonThread() throws InterruptedException {
-        daemonThread.start();
+        pubSub.startWithChannels(getPubSubChannels());
+
         startLatch.await();
 
         // we start processing earlier events.
@@ -138,8 +139,11 @@ public final class ConsumerImpl implements Consumer, Runnable {
 
     public void shutdown() {
         try {
-            pubSub.unsubscribe();
+            pubSub.unsubscrubeAllAndStop();
             stopLatch.await();
+
+            SelfStatusWriter.delete(consumerConfig);
+
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -189,24 +193,6 @@ public final class ConsumerImpl implements Consumer, Runnable {
         channels.add("id:" + getConsumerIdentity().getIdentifier());
 
         return channels.toArray(new String[]{});
-    }
-
-    @Override
-    public void run() {
-        try (Jedis jedis = consumerConfig.getPool().getResource()) {
-            LOGGER.info("Subscribing to pubsub channels: {} on {}", getPubSubChannels(), getConsumerIdentity().getIdentifier());
-
-            // ez blokkol!
-            jedis.subscribe(pubSub, getPubSubChannels());
-
-            // TODO: ezt a szalat is le kell tudni allitani!!!
-            LOGGER.info("Exiting pubsub listener thread of {}", getConsumerIdentity().getIdentifier());
-        } catch (Throwable e) {
-            LOGGER.error("Exception on pubsub listener thread of " + getConsumerIdentity().getIdentifier(), e);
-        } finally {
-            LOGGER.info("Quitting pubsub listener thread of {}", getConsumerIdentity().getIdentifier());
-            // Jedis instance has been returned to the pool!
-        }
     }
 
     private final class BroadcastRunnable implements Runnable {

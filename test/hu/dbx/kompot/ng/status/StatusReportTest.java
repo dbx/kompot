@@ -6,8 +6,10 @@ import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import redis.clients.jedis.Jedis;
 
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +32,17 @@ public class StatusReportTest {
 
     @Rule
     public TestRedis redis = TestRedis.build();
+
+
+    @Before
+    public void before() {
+        try (Jedis jedis = redis.getJedisPool().getResource()) {
+            jedis.flushDB();
+            jedis.flushAll();
+            jedis.sync();
+        }
+    }
+
 
     @Test
     public void testFindsOwnStatusReporter() throws InterruptedException {
