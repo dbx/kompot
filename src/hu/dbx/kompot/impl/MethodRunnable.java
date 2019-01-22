@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static hu.dbx.kompot.impl.DataHandling.EventKeys.SENDER;
 import static hu.dbx.kompot.impl.LoggerUtils.debugMethodFrame;
 
 /**
@@ -145,7 +146,12 @@ final class MethodRunnable implements Runnable {
             // hogy nehogy lejarjon mire megjon a valasz!
             store.expire(methodKey, 15);
 
-            String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
+//            String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
+
+            // amugy ezt korabban kellett volna kimenteni!
+            final String sender = store.hget(methodKey, SENDER.name());
+            final String responseNotificationChannel = "id:" + sender;
+            
             LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
 
             store.publish(responseNotificationChannel, methodUuid.toString());

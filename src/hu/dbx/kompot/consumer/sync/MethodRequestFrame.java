@@ -1,5 +1,6 @@
 package hu.dbx.kompot.consumer.sync;
 
+import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.ProducerIdentity;
 
@@ -47,7 +48,7 @@ public final class MethodRequestFrame<Req> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <Req> MethodRequestFrame<Req> build(ProducerIdentity sender, MethodDescriptor<Req, ?> marker, Req request, MetaDataHolder metaData) {
+    public static <Req> MethodRequestFrame<Req> build(ConsumerIdentity sender, MethodDescriptor<Req, ?> marker, Req request, MetaDataHolder metaData) {
         return new MethodRequestFrame(UUID.randomUUID(), marker, request, sender.getIdentifier(), metaData);
     }
 

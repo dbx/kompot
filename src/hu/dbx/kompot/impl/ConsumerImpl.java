@@ -67,7 +67,7 @@ public final class ConsumerImpl implements Consumer {
         String messageResponseChannel = consumerConfig.getNaming().getMessageResponseNotificationChannel(messageUuid);
         LOGGER.debug("Subscribing to {}", messageResponseChannel);
         futures.put(messageUuid, runnable);
-        pubSub.subscribeForOnce(messageResponseChannel);
+        // pubSub.subscribeForOnce(messageResponseChannel);
     }
 
     private final CountDownLatch startLatch = new CountDownLatch(1);
@@ -110,7 +110,8 @@ public final class ConsumerImpl implements Consumer {
                 } catch (RejectedExecutionException rejected) {
                     LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
                 }
-            } else if (channel.contains(":r:")) {
+            } else if (channel.startsWith("id:") && futures.containsKey(UUID.fromString(message))) {
+                // TODO: a response mar nem ide jon!
                 LOGGER.debug("Receiving method response: {} => {}", channel, message);
                 futures.remove(UUID.fromString(message)).run();
             } else {

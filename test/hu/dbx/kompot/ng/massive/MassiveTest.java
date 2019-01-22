@@ -29,8 +29,6 @@ public class MassiveTest {
 
     public static final int AGENT_COUNT = 10, EVENT_COUNT = 100, MESSAGE_COUNT = 100, BROADCAST_COUNT = 100;
 
-
-    @Ignore
     @Test
     public void test() throws InterruptedException {
 

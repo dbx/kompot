@@ -104,7 +104,7 @@ public final class ProducerImpl implements Producer {
         }
 
         // make request object
-        final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(getProducerIdentity(), marker, methodData, metaData);
+        final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(consumer.getConsumerIdentity(), marker, methodData, metaData);
 
         LOGGER.trace("Built method to send: {}", requestFrame);
 

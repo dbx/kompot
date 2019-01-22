@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
 
 /**
- * Like JedisPubSub but thread safe.
+ * A thread safe facade for JedisPubSub
  */
 public final class ThreadSafePubSub implements Runnable {
 
@@ -21,8 +21,8 @@ public final class ThreadSafePubSub implements Runnable {
 
     private final Thread daemonThread = new Thread(this);
 
-    // ha ezt kapja a csatornan akkor megall.
-    private final String posion = UUID.randomUUID().toString();
+    // receiving an event on this channel stops the component
+    private final String poison = UUID.randomUUID().toString();
 
     private final Set<String> onceSubscribed = new ConcurrentSkipListSet<>();
 
@@ -63,7 +63,7 @@ public final class ThreadSafePubSub implements Runnable {
         @Override
         public void onMessage(String channel, String message) {
             System.out.println("message..." + channel + " = " + message);
-            if (posion.equals(channel)) {
+            if (poison.equals(channel)) {
                 System.out.println("*** Received poison!");
                 pubSub.unsubscribe();
                 System.out.println("*** Received poison 2");
@@ -107,13 +107,12 @@ public final class ThreadSafePubSub implements Runnable {
     public void run() {
         try (Jedis resource = jedisPool.getResource()) {
             System.out.println("Calling subscribe on " + channelToLatch.keySet());
-            synchronized (resource) {
 
-                final Set<String> chs = new HashSet<>(channelToLatch.keySet());
-                chs.add(posion);
+            final Set<String> chs = new HashSet<>(channelToLatch.keySet());
+            chs.add(poison);
 
-                resource.subscribe(pubSub, chs.toArray(new String[]{}));
-            }
+            resource.subscribe(pubSub, chs.toArray(new String[]{}));
+
             // itt megall a rendszer es blokkol!!!
         }
     }
@@ -124,7 +123,7 @@ public final class ThreadSafePubSub implements Runnable {
     public synchronized void unsubscrubeAllAndStop() throws InterruptedException {
 
         System.out.println("Initiated stopping!");
-        channelToLatch.put(posion, new CountDownLatch(1));
+        channelToLatch.put(poison, new CountDownLatch(1));
 
         for (String channel : new HashSet<>(subscribed)) {
             channelToLatch.put(channel, new CountDownLatch(1));
@@ -133,7 +132,7 @@ public final class ThreadSafePubSub implements Runnable {
         System.out.println("Publishing poison!");
 
         try (Jedis jedis = jedisPool.getResource()) {
-            jedis.publish(posion, "now");
+            jedis.publish(poison, "now");
         }
 
         System.out.println("Awaiting...git");
@@ -143,17 +142,6 @@ public final class ThreadSafePubSub implements Runnable {
             entry.getValue().await();
         }
     }
-
-    /**
-     * Subscribes to a channel and blocks until subscription is successful.
-     * <p>
-     * When a message is received to the channel ir will immediately unsubscribe!
-     */
-    public synchronized void subscribeForOnce(String channel) {
-        onceSubscribed.add(channel);
-        pubSub.subscribe(channel);
-    }
-
 
     public interface Listener {
         void onMessage(String channel, String message);
