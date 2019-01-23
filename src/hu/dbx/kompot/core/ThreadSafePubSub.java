@@ -5,7 +5,6 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPubSub;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
 
@@ -26,8 +25,8 @@ public final class ThreadSafePubSub implements Runnable {
 
     private final Set<String> onceSubscribed = new ConcurrentSkipListSet<>();
 
-    // TODO: itt volt ConcurrentHashMap is de nem latta a kulcsokat amiket beletettunk!
-    private final Map<String, CountDownLatch> channelToLatch = new ConcurrentHashMap<>();
+    // do not user ConcurrentHashMap here because keys will not be visible on both threads immediately
+    private final Map<String, CountDownLatch> channelToLatch = Collections.synchronizedMap(new HashMap<>());
 
     public ThreadSafePubSub(JedisPool pool, Listener listener) {
         this.jedisPool = pool;
