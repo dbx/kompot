@@ -25,7 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class ConsumerImpl implements Consumer {
+public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
 
     /**
      * Maximum number of event processing threads.
@@ -52,7 +52,7 @@ public final class ConsumerImpl implements Consumer {
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
         this.consumerHandlers = consumerHandlers;
-        this.pubSub = new ThreadSafePubSub(consumerConfig.getPool(), this.pubSubListener);
+        this.pubSub = new ThreadSafePubSub(consumerConfig.getPool(), this);
     }
 
     private final Map<UUID, Runnable> futures = new ConcurrentHashMap<>();
@@ -70,50 +70,48 @@ public final class ConsumerImpl implements Consumer {
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
 
-    private final ThreadSafePubSub.Listener pubSubListener = new ThreadSafePubSub.Listener() {
 
-        @Override
-        public void onSubscribe(String channel, int subscribedChannels) {
-            if (channel.startsWith("id:")) {
-                startLatch.countDown();
-            }
+    @Override
+    public void onSubscribe(String channel, int subscribedChannels) {
+        if (subscribedChannels == getPubSubChannels().length) {
+            startLatch.countDown();
         }
+    }
 
-        @Override
-        public void onUnsubscribe(String channel, int subscribedChannels) {
-            if (0 == subscribedChannels) {
-                stopLatch.countDown();
-            }
+    @Override
+    public void onUnsubscribe(String channel, int subscribedChannels) {
+        if (0 == subscribedChannels) {
+            stopLatch.countDown();
         }
+    }
 
-        @Override
-        public void onMessage(String channel, String message) {
-            // itt ki kell talalni h kinek adom tovabb.
-            if (channel.startsWith("b:")) {
-                final String broadcastCode = channel.substring(2);
-                LOGGER.info("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
-                submitToExecutor(new BroadcastRunnable(broadcastCode, message));
-            } else if (channel.startsWith("e:")) {
-                startEventProcessing(UUID.fromString(message));
-            } else if (channel.startsWith("m:")) {                 // uzenet keres
-                LOGGER.debug("Received message bang {} on channel {}, trying to start method.", message, channel);
-                //noinspection unused
-                final String methodName = channel.substring(2);
-                try {
-                    MethodRunnable runnable = new MethodRunnable(ConsumerImpl.this, consumerConfig, methodEventListeners, consumerHandlers, UUID.fromString(message));
-                    submitToExecutor(runnable);
-                } catch (RejectedExecutionException rejected) {
-                    LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
-                }
-            } else if (channel.startsWith("id:") && futures.containsKey(UUID.fromString(message))) {
-                // TODO: a response mar nem ide jon!
-                LOGGER.debug("Receiving method response: {} => {}", channel, message);
-                futures.remove(UUID.fromString(message)).run();
-            } else {
-                LOGGER.error("Unexpected message on channel {} => {}", channel, message);
+    @Override
+    public void onMessage(String channel, String message) {
+        // itt ki kell talalni h kinek adom tovabb.
+        if (channel.startsWith("b:")) {
+            final String broadcastCode = channel.substring(2);
+            LOGGER.info("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
+            submitToExecutor(new BroadcastRunnable(broadcastCode, message));
+        } else if (channel.startsWith("e:")) {
+            startEventProcessing(UUID.fromString(message));
+        } else if (channel.startsWith("m:")) {                 // uzenet keres
+            LOGGER.debug("Received message bang {} on channel {}, trying to start method.", message, channel);
+            //noinspection unused
+            final String methodName = channel.substring(2);
+            try {
+                MethodRunnable runnable = new MethodRunnable(ConsumerImpl.this, consumerConfig, methodEventListeners, consumerHandlers, UUID.fromString(message));
+                submitToExecutor(runnable);
+            } catch (RejectedExecutionException rejected) {
+                LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
             }
+        } else if (channel.startsWith("id:") && futures.containsKey(UUID.fromString(message))) {
+            // TODO: a response mar nem ide jon!
+            LOGGER.debug("Receiving method response: {} => {}", channel, message);
+            futures.remove(UUID.fromString(message)).run();
+        } else {
+            LOGGER.error("Unexpected message on channel {} => {}", channel, message);
         }
-    };
+    }
 
     // TODO: how to stop it when undeployed?
     // TODO: do not use threading here.
