@@ -5,8 +5,8 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPubSub;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A thread safe facade for JedisPubSub
@@ -23,10 +23,10 @@ public final class ThreadSafePubSub implements Runnable {
     // receiving an event on this channel stops the component
     private final String poison = UUID.randomUUID().toString();
 
-    private final Set<String> onceSubscribed = new ConcurrentSkipListSet<>();
+    private final CountDownLatch startLatch = new CountDownLatch(1);
+    private final CountDownLatch stopLatch = new CountDownLatch(1);
 
-    // do not user ConcurrentHashMap here because keys will not be visible on both threads immediately
-    private final Map<String, CountDownLatch> channelToLatch = Collections.synchronizedMap(new HashMap<>());
+    private final AtomicInteger expectedChannels = new AtomicInteger(-1);
 
     public ThreadSafePubSub(JedisPool pool, Listener listener) {
         this.jedisPool = pool;
@@ -37,8 +37,8 @@ public final class ThreadSafePubSub implements Runnable {
 
         @Override
         public void onSubscribe(String channel, int subscribedChannels) {
-            if (channelToLatch.containsKey(channel)) {
-                channelToLatch.get(channel).countDown();
+            if (subscribedChannels == expectedChannels.get()) {
+                startLatch.countDown();
             }
 
             subscribed.add(channel);
@@ -48,8 +48,8 @@ public final class ThreadSafePubSub implements Runnable {
 
         @Override
         public void onUnsubscribe(String channel, int subscribedChannels) {
-            if (channelToLatch.containsKey(channel)) {
-                channelToLatch.get(channel).countDown();
+            if (subscribedChannels == 0) {
+                stopLatch.countDown();
             }
 
             subscribed.remove(channel);
@@ -61,16 +61,7 @@ public final class ThreadSafePubSub implements Runnable {
         public void onMessage(String channel, String message) {
             if (poison.equals(channel)) {
                 pubSub.unsubscribe();
-                for (CountDownLatch latch : channelToLatch.values()) {
-                    latch.countDown();
-                }
             } else {
-
-                if (onceSubscribed.contains(channel)) {
-                    onceSubscribed.remove(channel);
-                    pubSub.unsubscribe(channel);
-                }
-
                 listener.onMessage(channel, message);
             }
         }
@@ -80,27 +71,23 @@ public final class ThreadSafePubSub implements Runnable {
      * Starts this component by subscribint to the given set of channels.
      */
     public synchronized void startWithChannels(String... channels) throws InterruptedException {
-        for (String c : channels) {
-            channelToLatch.put(c, new CountDownLatch(1));
-        }
+
+        subscribed.addAll(Arrays.asList(channels));
 
         daemonThread.start();
 
-        for (String channel : channels) {
-            channelToLatch.get(channel).await();
-            channelToLatch.remove(channel);
-        }
+        startLatch.await();
     }
 
     @Override
     public void run() {
         try (Jedis resource = jedisPool.getResource()) {
-            final Set<String> chs = new HashSet<>(channelToLatch.keySet());
-            chs.add(poison);
+            subscribed.add(poison);
+            expectedChannels.set(subscribed.size());
 
-            resource.subscribe(pubSub, chs.toArray(new String[]{}));
-
-            // itt megall a rendszer es blokkol!!!
+            resource.subscribe(pubSub, subscribed.toArray(new String[]{}));
+            // the worker thread blocks here.
+            // maybe add logging and error handling for network errors.
         }
     }
 
@@ -109,19 +96,11 @@ public final class ThreadSafePubSub implements Runnable {
      */
     public synchronized void unsubscrubeAllAndStop() throws InterruptedException {
 
-        channelToLatch.put(poison, new CountDownLatch(1));
-
-        for (String channel : new HashSet<>(subscribed)) {
-            channelToLatch.put(channel, new CountDownLatch(1));
-        }
-
         try (Jedis jedis = jedisPool.getResource()) {
             jedis.publish(poison, "now");
         }
 
-        for (Map.Entry<String, CountDownLatch> entry : channelToLatch.entrySet()) {
-            entry.getValue().await();
-        }
+        stopLatch.await();
     }
 
     public interface Listener {
