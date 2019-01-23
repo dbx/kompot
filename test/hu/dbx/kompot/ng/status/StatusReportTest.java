@@ -34,16 +34,6 @@ public class StatusReportTest {
     public TestRedis redis = TestRedis.build();
 
 
-    @Before
-    public void before() {
-        try (Jedis jedis = redis.getJedisPool().getResource()) {
-            jedis.flushDB();
-            jedis.flushAll();
-            jedis.sync();
-        }
-    }
-
-
     @Test
     public void testFindsOwnStatusReporter() throws InterruptedException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);

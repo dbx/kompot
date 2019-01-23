@@ -67,7 +67,6 @@ public final class ConsumerImpl implements Consumer {
         String messageResponseChannel = consumerConfig.getNaming().getMessageResponseNotificationChannel(messageUuid);
         LOGGER.debug("Subscribing to {}", messageResponseChannel);
         futures.put(messageUuid, runnable);
-        // pubSub.subscribeForOnce(messageResponseChannel);
     }
 
     private final CountDownLatch startLatch = new CountDownLatch(1);
@@ -85,8 +84,6 @@ public final class ConsumerImpl implements Consumer {
         @Override
         public void onUnsubscribe(String channel, int subscribedChannels) {
             if (0 == subscribedChannels) {
-//                SelfStatusWriter.delete(consumerConfig);
-
                 stopLatch.countDown();
             }
         }
