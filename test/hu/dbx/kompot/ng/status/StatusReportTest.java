@@ -6,10 +6,8 @@ import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
-import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import redis.clients.jedis.Jedis;
 
 import java.util.HashSet;
 import java.util.List;
