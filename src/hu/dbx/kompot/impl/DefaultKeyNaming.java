@@ -88,15 +88,6 @@ public final class DefaultKeyNaming implements KeyNaming {
     }
 
     @Override
-    public String getMessageResponseNotificationChannel(UUID messageUuid) {
-        if (messageUuid == null) {
-            throw new NullPointerException("Message UUID is null!");
-        } else {
-            return prefix + ":r:" + messageUuid;
-        }
-    }
-
-    @Override
     public String methodDetailsKey(UUID methodUuid) {
         if (methodUuid == null) {
             throw new NullPointerException("Method UUID is empty!");

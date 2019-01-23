@@ -65,13 +65,6 @@ public interface KeyNaming {
     String eventDetailsKey(String groupCode, UUID eventUuid);
 
     /**
-     * Erre a csatornara kuldunk ertesitest ha erkezik valasz.
-     *
-     * @throws NullPointerException when method uuid is null
-     */
-    String getMessageResponseNotificationChannel(UUID messageUuid);
-
-    /**
      * Method details are persisted here.
      *
      * @throws NullPointerException when method uuid is null

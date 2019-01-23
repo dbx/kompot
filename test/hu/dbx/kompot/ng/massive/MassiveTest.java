@@ -55,7 +55,6 @@ public class MassiveTest {
         }
 
 
-
         final CountDownLatch agentsLatch;
         final int nr;
         final AtomicInteger allEvents;
@@ -160,5 +159,5 @@ public class MassiveTest {
 
     private final static List<BroadcastDescriptor<Map>> BROADCAST = asList(BroadcastDescriptor.of("BC1", Map.class), BroadcastDescriptor.of("BC2", Map.class));
     private final static List<MethodDescriptor<Map, Map>> METHOD = asList(MethodDescriptor.ofName("MG1", "METH1"), MethodDescriptor.ofName("MG2", "METH2"));
-    private final static List<EventDescriptor<Map>> EVENT = asList(EventDescriptor.of("EVT", Map.class),EventDescriptor.of("EV2", Map.class));
+    private final static List<EventDescriptor<Map>> EVENT = asList(EventDescriptor.of("EVT", Map.class), EventDescriptor.of("EV2", Map.class));
 }

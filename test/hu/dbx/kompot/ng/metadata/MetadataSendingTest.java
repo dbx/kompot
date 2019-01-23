@@ -72,7 +72,7 @@ public class MetadataSendingTest {
     }
 
     @Test
-    public void testSuccessfullyHandleEvent() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
+    public void testSuccessfullyHandleMethod() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
         AtomicReference<MetaDataHolder> outputMeta = new AtomicReference<>();
 
