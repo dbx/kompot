@@ -146,8 +146,6 @@ final class MethodRunnable implements Runnable {
             // hogy nehogy lejarjon mire megjon a valasz!
             store.expire(methodKey, 15);
 
-//            String responseNotificationChannel = consumer.getKeyNaming().getMessageResponseNotificationChannel(methodUuid);
-
             // amugy ezt korabban kellett volna kimenteni!
             final String sender = store.hget(methodKey, SENDER.name());
             final String responseNotificationChannel = "id:" + sender;

@@ -64,8 +64,6 @@ public final class ConsumerImpl implements Consumer {
      * TODO: timeout parameter is legyen!
      */
     void registerMessageFuture(UUID messageUuid, Runnable runnable) {
-        String messageResponseChannel = consumerConfig.getNaming().getMessageResponseNotificationChannel(messageUuid);
-        LOGGER.debug("Subscribing to {}", messageResponseChannel);
         futures.put(messageUuid, runnable);
     }
 
