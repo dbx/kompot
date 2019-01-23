@@ -31,7 +31,6 @@ public class StatusReportTest {
     @Rule
     public TestRedis redis = TestRedis.build();
 
-
     @Test
     public void testFindsOwnStatusReporter() throws InterruptedException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
