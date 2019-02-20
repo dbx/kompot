@@ -18,6 +18,7 @@ import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
 import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 /**
@@ -53,7 +54,9 @@ public class MethodHandlingTimeoutTest {
     }
 
     /**
-     * Több timeoutoló üzenet helyes viselkedését vizsgáljuk. Mindegyik csak a megfelelő időben válik cancelleddé
+     * Több timeoutoló üzenet helyes viselkedését vizsgáljuk. Mindegyik csak a megfelelő időben válik cancelleddé.
+     *
+     * Harom metodushivas tortenik harom kulonbozo timeout alatt. Egyikre sem valaszol senki.
      */
     @Test
     public void testMultipleMessageTimeout() throws InterruptedException, SerializationException {
@@ -82,7 +85,10 @@ public class MethodHandlingTimeoutTest {
     }
 
     /**
-     * A timeoutolást nézi egy realisztikusabb scenárióban, ahol van consumer is
+     * A timeoutolást nézi egy realisztikusabb scenárióban, ahol van consumer is.
+     *
+     * Itt a consumer megkapja a kerest es elkezdi feldolgozni, de mar csak boven a timeout utan irna vissza a valaszt.
+     * Ezert a hivo oldalon CancellationException-t dob a .get() hivas.
      */
     @Test
     public void testGettingCancellationException() throws InterruptedException, SerializationException, ExecutionException, TimeoutException {
@@ -104,13 +110,16 @@ public class MethodHandlingTimeoutTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
+        // itt csak megvarjuk, amig elindul a valaszolo fel.
         Thread.sleep(1000);
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100), singletonMap("aa", 11));
 
         try {
+            // mivel
             response.get(3, TimeUnit.SECONDS);
-            fail("Exception not thrown");
+            fail("Exception should have been thrown!");
         } catch (CancellationException ignore) {
+            // expected
         }
 
         assertTrue(startedProcessing.get());
@@ -145,5 +154,7 @@ public class MethodHandlingTimeoutTest {
         producer.stop();
         consumer.stop();
         executor.shutdown();
+
+        assertEquals(singletonMap("a", 1), response.get());
     }
 }

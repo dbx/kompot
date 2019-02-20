@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static hu.dbx.kompot.impl.DataHandling.EventKeys.SENDER;
 import static hu.dbx.kompot.impl.LoggerUtils.debugMethodFrame;
 
 /**
@@ -44,37 +43,38 @@ final class MethodRunnable implements Runnable {
     @Override
     public void run() {
         try (final Jedis store = consumerConfig.getPool().getResource()) {
-
             if (!steal(store)) {
                 LOGGER.debug("Could not steal {}", methodUuid);
                 // some other instance has already took this item, we do nothing
-                return;
-            }
+            } else {
 
-            MethodRequestFrame mrf = null;
+                MethodRequestFrame mrf = null;
 
-            // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar egyem az ownership.
-            try {
-                final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
+                // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar enyem az ownership.
+                try {
+                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
 
-                if (frameOp.isPresent()) {
-                    mrf = frameOp.get();
-                    process(store, mrf);
-                } else {
-                    LOGGER.debug("Could not read from method {}", methodKey);
-                    // lejart a metodus?
+                    if (frameOp.isPresent()) {
+                        mrf = frameOp.get();
+                        process(store, mrf);
+                    } else {
+                        LOGGER.debug("Could not read from method {}", methodKey);
+                        // lejart a metodus mielott ki tudtuk volna olvasni?
+                    }
+                } catch (Throwable t) {
+                    LOGGER.error("Exception happened when sending method");
+                    debugMethodFrame(LOGGER, mrf);
+                    LOGGER.error("Method exception: ", t);
+                    writeMethodFailure(store, t);
+
+                    if (mrf != null) {
+                        callFailureListeners(mrf, t);
+                    }
+                } finally {
+                    if (mrf != null) {
+                        respond(store, UUID.fromString(mrf.getSourceIdentifier()));
+                    }
                 }
-            } catch (Throwable t) {
-                LOGGER.error("Exception happened when sending method");
-                debugMethodFrame(LOGGER, mrf);
-                LOGGER.error("Method exception: ", t);
-                writeMethodFailure(store, t);
-
-                if (mrf != null) {
-                    callFailureListeners(mrf, t);
-                }
-            } finally {
-                respond(store);
             }
         }
     }
@@ -116,15 +116,14 @@ final class MethodRunnable implements Runnable {
     }
 
     /**
-     * On case of callFailureListeners we run callbacks and write callFailureListeners code.
+     * On case of failures we run callbacks and write failure code.
      */
     private void callFailureListeners(MethodRequestFrame mrf, Throwable t) {
-        // esemenykezelok futtatasa
         methodEventListeners.forEach(x -> {
             try {
                 x.onRequestProcessingFailure(mrf, t);
             } catch (Throwable e) {
-                LOGGER.error("Error when running method sending event listener for {} on {}", e);
+                LOGGER.error("Error when running method failure event listener for {} on {}", e);
             }
         });
     }
@@ -132,7 +131,7 @@ final class MethodRunnable implements Runnable {
     /**
      * Sets timeout on method key and notifies reqester module.
      */
-    private void respond(Jedis store) {
+    private void respond(Jedis store, UUID senderUuid) {
         if (!store.getClient().isConnected()) {
             LOGGER.error("Redis got disconnected. exiting.");
         } else if (store.getClient().isBroken()) {
@@ -146,10 +145,8 @@ final class MethodRunnable implements Runnable {
             // hogy nehogy lejarjon mire megjon a valasz!
             store.expire(methodKey, 15);
 
-            // amugy ezt korabban kellett volna kimenteni!
-            final String sender = store.hget(methodKey, SENDER.name());
-            final String responseNotificationChannel = "id:" + sender;
-            
+            final String responseNotificationChannel = "id:" + senderUuid;
+
             LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
 
             store.publish(responseNotificationChannel, methodUuid.toString());

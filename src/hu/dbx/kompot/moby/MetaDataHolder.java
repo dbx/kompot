@@ -40,8 +40,8 @@ public final class MetaDataHolder {
         return new MetaDataHolder(correlationId, null, null, null);
     }
 
-    public static MetaDataHolder fromUserRef(String correlationId) {
-        return new MetaDataHolder(correlationId, null, null, null);
+    public static MetaDataHolder fromUserRef(String userRef) {
+        return new MetaDataHolder(null, userRef, null, null);
     }
 
     public static MetaDataHolder build(String correlationId, String userRef, Long batchId) {
