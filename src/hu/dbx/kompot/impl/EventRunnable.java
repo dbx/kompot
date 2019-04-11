@@ -84,7 +84,7 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
             }
 
             callback.markProcessing();
-            LOGGER.debug("Sterted processing event uuid={}", eventUuid);
+            LOGGER.debug("Started processing event uuid={}", eventUuid);
 
             for (EventReceivingCallback eventReceivingCallback : eventReceivingCallbacks) {
                 try {

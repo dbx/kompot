@@ -113,8 +113,6 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
         }
     }
 
-    // TODO: how to stop it when undeployed?
-    // TODO: do not use threading here.
     public void startDaemonThread() throws InterruptedException {
         pubSub.startWithChannels(getPubSubChannels());
 
@@ -122,13 +120,18 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
 
         // we start processing earlier events.
         LOGGER.debug("started daemon thread.");
-        // csak azert noveljuk, mert az after event runnable csokkenteni fogja!
-        processingEvents.incrementAndGet();
 
         // ez fogja a modul statuszat rendszeresen beleirni.
         SelfStatusWriter.start(consumerConfig);
 
-        submitToExecutorTrampoline(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks));
+        // There may be unprocessed events in the queue so we start to process it on as many threads as possible
+        for (int i = 1; i < MAX_EVENTS; i++) {
+            // csak azert noveljuk, mert az after event runnable csokkenteni fogja!
+            processingEvents.incrementAndGet();
+
+            // inditunk egy feldolgozast, hatha
+            submitToExecutorTrampoline(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks));
+        }
     }
 
     public void shutdown() {

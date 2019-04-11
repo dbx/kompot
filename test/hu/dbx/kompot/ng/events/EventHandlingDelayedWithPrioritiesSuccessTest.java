@@ -7,11 +7,9 @@ import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
 import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.exceptions.SerializationException;
-import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import org.junit.Rule;
 import org.junit.Test;
-import org.slf4j.Logger;
 
 import java.net.URI;
 import java.util.Map;
@@ -31,10 +29,10 @@ import static org.junit.Assert.assertEquals;
 @SuppressWarnings("unchecked")
 public class EventHandlingDelayedWithPrioritiesSuccessTest {
 
-    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1", Map.class, Priority.LOW);
+    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1D", Map.class, Priority.LOW);
     private static final EventDescriptor EVENT_2 = EventDescriptor.of("EVENT2", Map.class, Priority.HIGH);
 
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1");
+    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1D");
     private static final ConsumerIdentity producerIdentity = groupGroup("XXX");
 
     @Rule
@@ -44,7 +42,8 @@ public class EventHandlingDelayedWithPrioritiesSuccessTest {
     public void testSendManyEventsAndProcessInOrder() throws InterruptedException, SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
 
-        final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.constantly("EVENT1"), producerIdentity, executor);
+        final EventGroupProvider provider = EventGroupProvider.constantly(EVENT_1.getEventName());
+        final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), provider, producerIdentity, executor);
         producer.start();
 
         for (int i = 0; i < 10; i++) {

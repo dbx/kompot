@@ -30,8 +30,8 @@ import static org.junit.Assert.*;
 public class EventsHandlingSuccessCallbackTest {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1");
+    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1X", Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1X");
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTC");
 
     @Rule

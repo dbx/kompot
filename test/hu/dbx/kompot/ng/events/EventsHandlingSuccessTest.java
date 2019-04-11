@@ -27,9 +27,9 @@ import static org.junit.Assert.assertNotEquals;
 public class EventsHandlingSuccessTest {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1");
-    private static final ConsumerIdentity producerIdentity = groupGroup("EVENTC");
+    private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT123", Map.class);
+    private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT123");
+    private static final ConsumerIdentity producerIdentity = groupGroup("EVENTCProducer");
 
     @Rule
     public TestRedis redis = TestRedis.build();
