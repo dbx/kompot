@@ -55,13 +55,14 @@ public class MetadataSendingTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0), MetaDataHolder.build("corri", "usrR", 42L));
+        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0), MetaDataHolder.build("corri", "usrR", "srcN",  42L));
 
         Thread.sleep(1000);
 
         assertNotNull(outputMeta.get());
         assertEquals("corri", outputMeta.get().getCorrelationId());
         assertEquals("usrR", outputMeta.get().getUserRef());
+        assertEquals("srcN", outputMeta.get().getSourceName());
         assertEquals(42L, (long) outputMeta.get().getBatchId());
 
         producer.stop();
@@ -93,13 +94,14 @@ public class MetadataSendingTest {
         consumer.start();
 
         Thread.sleep(1000);
-        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11), MetaDataHolder.build("xxx", "yyy", null));
+        CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11), MetaDataHolder.build("xxx", "yyy", "sss", null));
 
         assertEquals(1, response.get(3, TimeUnit.SECONDS).get("a"));
 
         assertNotNull(outputMeta.get());
         assertEquals("xxx", outputMeta.get().getCorrelationId());
         assertEquals("yyy", outputMeta.get().getUserRef());
+        assertEquals("sss", outputMeta.get().getSourceName());
         assertNull(outputMeta.get().getBatchId());
 
 

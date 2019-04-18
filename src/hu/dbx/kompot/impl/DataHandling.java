@@ -259,6 +259,9 @@ public final class DataHandling {
             if (metaData.getUserRef() != null) {
                 store.hset(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name(), metaData.getUserRef());
             }
+            if (metaData.getSourceName() != null) {
+                store.hset(detailsKey, MetaDataHolder.MetaDataFields.SOURCE_NAME.name(), metaData.getSourceName());
+            }
             if (metaData.getBatchId() != null) {
                 store.hsetnx(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name(), metaData.getBatchId().toString());
             }
@@ -271,10 +274,11 @@ public final class DataHandling {
     private static MetaDataHolder readMetaData(Jedis jedis, String detailsKey) {
         final String corrId = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.CORRELATION_ID.name());
         final String userRef = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.USER_REF.name());
+        final String sourceName = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.SOURCE_NAME.name());
         final String batchIdStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name());
         final String feedbackUuidStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.FEEDBACK_UUID.name());
 
-        MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, null);
+        MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, sourceName,null);
 
         if (batchIdStr != null && !batchIdStr.trim().isEmpty()) {
             meta = meta.withBatchId(Long.valueOf(batchIdStr));
