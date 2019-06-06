@@ -121,6 +121,7 @@ public final class SerializeHelper {
         }
     }
 
+
     public static Object deserializeResponse(String content, MethodDescriptor marker) throws DeserializationException {
         final Class targetClass = marker.getResponseClass();
 
@@ -134,6 +135,10 @@ public final class SerializeHelper {
     }
 
     public static Object deserializeRequest(String methodName, String content, MethodDescriptorResolver resolver) throws DeserializationException {
+        return deserializeRequest(methodName, new StringBufferInputStream(content), resolver);
+    }
+
+    public static Object deserializeRequest(String methodName, InputStream content, MethodDescriptorResolver resolver) throws DeserializationException {
         final Optional<MethodDescriptor> marker = resolver.resolveMarker(methodName);
 
         if (!marker.isPresent()) {
@@ -147,7 +152,7 @@ public final class SerializeHelper {
             return (getObjectMapper().readValue(content, targetClass));
         } catch (Exception e) {
             String message = "Could not deserialize payload for method " + methodName + " class: " + targetClass;
-            throw new DeserializationException(content, message, e);
+            throw new DeserializationException("-", message, e);
         }
     }
 
@@ -174,6 +179,15 @@ public final class SerializeHelper {
             throw new SerializationException(object, "Could not serialize any data", e);
         }
     }
+
+    public static byte[] serializeObjectToBytes(Object object) throws SerializationException {
+        try {
+            return getObjectMapper().writeValueAsBytes(object);
+        } catch (JsonProcessingException e) {
+            throw new SerializationException(object, "Could not serialize any data", e);
+        }
+    }
+
 
     public static MessageErrorResultException deserializeException(String methodDetailsKey, Jedis connection) {
         final String className = connection.hget(methodDetailsKey, EXCEPTION_CLASS.name());

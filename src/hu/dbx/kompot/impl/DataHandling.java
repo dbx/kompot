@@ -18,11 +18,13 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.StreamSupport;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
 import static java.lang.String.join;
@@ -106,7 +108,6 @@ public final class DataHandling {
         LOGGER.debug("Saving event details under key {}", eventDetailsKey);
 
         store.hsetnx(eventDetailsKey, CODE.name(), eventFrame.getEventMarker().getEventName());
-        store.hsetnx(eventDetailsKey, DATA.name(), SerializeHelper.serializeDataOnly(eventFrame));
         // TODO: use server time instead
         // store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(store.time().get().get(0)));
         store.hsetnx(eventDetailsKey, FIRST_SENT.name(), String.valueOf(LocalDateTime.now()));
@@ -118,8 +119,31 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(groupCount));
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
+        saveEventData(store, eventFrame.getEventData(), eventDetailsKey);
 
         LOGGER.debug("Saved event details key.");
+    }
+
+    private static void saveEventData(Transaction jedis, Object data, String detailsKey) throws SerializationException {
+        final String dataJson = SerializeHelper.serializeObject(data);
+
+        //2^13
+        if (dataJson.length() > 8192) {
+            jedis.hsetnx(detailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(dataJson));
+        } else {
+            jedis.hsetnx(detailsKey, DATA.name(), dataJson);
+        }
+    }
+
+    private static byte[] compressData(String eventData) throws SerializationException {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream(); GZIPOutputStream iz = new GZIPOutputStream(out)) {
+            iz.write(eventData.getBytes());
+            iz.close();
+            out.close();
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @SuppressWarnings("WeakerAccess")
@@ -202,12 +226,7 @@ public final class DataHandling {
         if (eventData != null) {
             eventDataObj = SerializeHelper.deserializeContentOnly(eventName, eventData, eventResolver);
         } else {
-            try (ByteArrayInputStream input = new ByteArrayInputStream(eventDataZip);
-                 GZIPInputStream iz = new GZIPInputStream(input)) {
-                eventDataObj = SerializeHelper.deserializeContentOnly(eventName, iz, eventResolver);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            eventDataObj = decompressEventData(eventResolver, eventName, eventDataZip);
         }
 
         final Optional<EventDescriptor> eventMarker = eventResolver.resolveMarker(eventName);
@@ -228,17 +247,28 @@ public final class DataHandling {
         }
     }
 
+    private static Object decompressEventData(EventDescriptorResolver eventResolver, String eventName, byte[] eventDataZip) throws DeserializationException {
+        Object eventDataObj;
+        try (ByteArrayInputStream input = new ByteArrayInputStream(eventDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
+            eventDataObj = SerializeHelper.deserializeContentOnly(eventName, iz, eventResolver);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return eventDataObj;
+    }
+
     static void writeMethodFrame(Transaction jedis, KeyNaming keyNaming, MethodRequestFrame frame) throws SerializationException {
         final String methodDetailsKey = keyNaming.methodDetailsKey(frame.getIdentifier());
         // minel elobb dobjunk kivetelt!
-        final String serialized = SerializeHelper.serializeObject(frame.getMethodData());
+//        final String serialized = SerializeHelper.serializeObject(frame.getMethodData());
 
         LOGGER.debug("Writing method frame to key {}", methodDetailsKey);
 
         // TODO: legyen multi/exec!
         jedis.hset(methodDetailsKey, CODE.name(), frame.getMethodMarker().getMethodName());
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
-        jedis.hset(methodDetailsKey, DATA.name(), serialized);
+//        jedis.hset(methodDetailsKey, DATA.name(), serialized);
+        saveMethodData(jedis, methodDetailsKey, frame.getMethodData());
 
         saveMetaData(jedis, frame.getMetaData(), methodDetailsKey);
 
@@ -247,6 +277,18 @@ public final class DataHandling {
 
         jedis.expire(methodDetailsKey, expiration);
     }
+
+    private static void saveMethodData(Transaction store, String detailsKey, Object data) throws SerializationException {
+        final String dataJson = SerializeHelper.serializeObject(data);
+
+        //2^13
+        if (dataJson.length() > 8190) {
+            store.hset(detailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(dataJson));
+        } else {
+            store.hset(detailsKey, DATA.name(), dataJson);
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     static Optional<MethodRequestFrame> readMethodFrame(Jedis jedis, KeyNaming keyNaming, MethodDescriptorResolver resolver, UUID methodUuid) throws DeserializationException {
@@ -258,6 +300,7 @@ public final class DataHandling {
         }
 
         final String methodData = jedis.hget(methodDetailsKey, DATA.name());
+        final byte[] methodDataZip = jedis.hget(methodDetailsKey.getBytes(), DATA_ZIP.name().getBytes());
         final String sender = jedis.hget(methodDetailsKey, SENDER.name());
 
         final Optional<MethodDescriptor> descriptor = resolver.resolveMarker(methodName);
@@ -266,12 +309,25 @@ public final class DataHandling {
             return Optional.empty();
         }
 
-        final Object requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
+//        final Object requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
+        final Object requestData;
+
+        if (methodData != null) {
+            requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
+        } else {
+            try (ByteArrayInputStream input = new ByteArrayInputStream(methodDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
+                requestData = SerializeHelper.deserializeRequest(methodName, iz, resolver);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
         final MetaDataHolder methodMeta = readMetaData(jedis, methodDetailsKey);
 
         final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData, methodMeta);
         return Optional.of(frame);
     }
+
 
     private static void saveMetaData(Transaction store, MetaDataHolder metaData, String detailsKey) {
         if (metaData != null) {
@@ -300,7 +356,7 @@ public final class DataHandling {
         final String batchIdStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name());
         final String feedbackUuidStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.FEEDBACK_UUID.name());
 
-        MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, sourceName,null);
+        MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, sourceName, null);
 
         if (batchIdStr != null && !batchIdStr.trim().isEmpty()) {
             meta = meta.withBatchId(Long.valueOf(batchIdStr));

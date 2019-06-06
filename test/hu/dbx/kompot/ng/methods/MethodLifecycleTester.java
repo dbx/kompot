@@ -8,13 +8,13 @@ import java.util.*;
 import static hu.dbx.kompot.ng.methods.MethodLifecycleTester.Events.*;
 import static org.junit.Assert.assertEquals;
 
-final class MethodLifecycleTester implements MethodSendingCallback {
+public final class MethodLifecycleTester implements MethodSendingCallback {
 
     enum Events {SENT, RECEIVED, ERROR, TIMEOUT}
 
     private final Map<UUID, List<Events>> frameEvents = Collections.synchronizedMap(new HashMap<>());
 
-    void assertSentAndReceived() {
+    public void assertSentAndReceived() {
         frameEvents.values().forEach(v -> assertEquals(Arrays.asList(SENT, RECEIVED), v));
     }
 
