@@ -8,10 +8,16 @@ import hu.dbx.kompot.impl.LoggerUtils;
 import org.slf4j.Logger;
 import redis.clients.jedis.*;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPInputStream;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
 import static java.util.stream.StreamSupport.stream;
@@ -101,17 +107,46 @@ public final class Reporting implements EventQueries, EventUpdates {
             return Optional.empty();
         } else {
             final String data = jedis.hget(eventDataKey, DATA.name());
+            final byte[] dataZip = jedis.hget(eventDataKey.getBytes(), DATA_ZIP.name().getBytes());
             final String groups = jedis.hget(eventDataKey, GROUPS.name());
             final String sender = jedis.hget(eventDataKey, SENDER.name());
             final String firstSentStr = jedis.hget(eventDataKey, FIRST_SENT.name());
             //ERROR_MSG?
 
+            String dataStr;
+            if (data != null) {
+                dataStr = data;
+            } else {
+                try (ByteArrayInputStream input = new ByteArrayInputStream(dataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
+                    dataStr = convertInputStreamToString(iz);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
+            }
+
             final LocalDateTime firstSent = LocalDateTime.parse(firstSentStr);
-            final EventData eventData = new EventData(uuid, eventType, data, groups, sender, firstSent);
+            final EventData eventData = new EventData(uuid, eventType, dataStr, groups, sender, firstSent);
 
             return Optional.of(eventData);
         }
     }
+
+
+    private static String convertInputStreamToString(InputStream inputStream)
+            throws IOException {
+
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        int length;
+        while ((length = inputStream.read(buffer)) != -1) {
+            result.write(buffer, 0, length);
+        }
+
+        return result.toString(StandardCharsets.UTF_8.name());
+
+    }
+
 
     @Override
     public ListResult<UUID> queryEventUuids(String group, EventFilters filters, Pagination pagination) {

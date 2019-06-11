@@ -10,7 +10,6 @@ import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.exceptions.DeserializationException;
-import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import org.slf4j.Logger;
@@ -44,7 +43,10 @@ public final class DataHandling {
 
         /**
          * Serialized event data
+         *
+         * @deprecated All data is sent compressed now
          */
+        @Deprecated
         DATA,
 
         /**
@@ -100,9 +102,8 @@ public final class DataHandling {
      * @param groups         groups to save
      * @param eventFrame     event instance
      * @param clientIdentity the sender id
-     * @throws SerializationException when can not serialize event data.
      */
-    static void saveEventDetails(Transaction store, KeyNaming keyNaming, Iterable<String> groups, EventFrame eventFrame, ProducerIdentity clientIdentity) throws SerializationException {
+    static void saveEventDetails(Transaction store, KeyNaming keyNaming, Iterable<String> groups, EventFrame eventFrame, ProducerIdentity clientIdentity) {
         final String eventDetailsKey = keyNaming.eventDetailsKey(eventFrame.getIdentifier());
 
         LOGGER.debug("Saving event details under key {}", eventDetailsKey);
@@ -119,25 +120,14 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(groupCount));
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
-        saveEventData(store, eventFrame.getEventData(), eventDetailsKey);
+        store.hsetnx(eventDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(eventFrame.getEventData()));
 
         LOGGER.debug("Saved event details key.");
     }
 
-    private static void saveEventData(Transaction jedis, Object data, String detailsKey) throws SerializationException {
-        final String dataJson = SerializeHelper.serializeObject(data);
-
-        //2^13
-        if (dataJson.length() > 8192) {
-            jedis.hsetnx(detailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(dataJson));
-        } else {
-            jedis.hsetnx(detailsKey, DATA.name(), dataJson);
-        }
-    }
-
-    private static byte[] compressData(String eventData) throws SerializationException {
+    private static byte[] compressData(Object eventData) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream(); GZIPOutputStream iz = new GZIPOutputStream(out)) {
-            iz.write(eventData.getBytes());
+            SerializeHelper.getObjectMapper().writeValue(iz, eventData);
             iz.close();
             out.close();
             return out.toByteArray();
@@ -145,6 +135,7 @@ public final class DataHandling {
             throw new RuntimeException(e);
         }
     }
+
 
     @SuppressWarnings("WeakerAccess")
     public static String formatGroupsString(Iterable<String> groups) {
@@ -220,7 +211,6 @@ public final class DataHandling {
             throw new IllegalArgumentException("Empty event name for eventUuid=" + eventUuid);
         }
 
-        // this call might throw IllegalArgumentException
         final Object eventDataObj;
 
         if (eventData != null) {
@@ -257,7 +247,7 @@ public final class DataHandling {
         return eventDataObj;
     }
 
-    static void writeMethodFrame(Transaction jedis, KeyNaming keyNaming, MethodRequestFrame frame) throws SerializationException {
+    static void writeMethodFrame(Transaction jedis, KeyNaming keyNaming, MethodRequestFrame frame) {
         final String methodDetailsKey = keyNaming.methodDetailsKey(frame.getIdentifier());
         // minel elobb dobjunk kivetelt!
 //        final String serialized = SerializeHelper.serializeObject(frame.getMethodData());
@@ -267,8 +257,7 @@ public final class DataHandling {
         // TODO: legyen multi/exec!
         jedis.hset(methodDetailsKey, CODE.name(), frame.getMethodMarker().getMethodName());
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
-//        jedis.hset(methodDetailsKey, DATA.name(), serialized);
-        saveMethodData(jedis, methodDetailsKey, frame.getMethodData());
+        jedis.hset(methodDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(frame.getMetaData()));
 
         saveMetaData(jedis, frame.getMetaData(), methodDetailsKey);
 
@@ -276,17 +265,6 @@ public final class DataHandling {
         LOGGER.debug("Setting expiration to {} seconds on key {}", expiration, methodDetailsKey);
 
         jedis.expire(methodDetailsKey, expiration);
-    }
-
-    private static void saveMethodData(Transaction store, String detailsKey, Object data) throws SerializationException {
-        final String dataJson = SerializeHelper.serializeObject(data);
-
-        //2^13
-        if (dataJson.length() > 8190) {
-            store.hset(detailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(dataJson));
-        } else {
-            store.hset(detailsKey, DATA.name(), dataJson);
-        }
     }
 
 
@@ -309,23 +287,28 @@ public final class DataHandling {
             return Optional.empty();
         }
 
-//        final Object requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
         final Object requestData;
 
         if (methodData != null) {
             requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
         } else {
-            try (ByteArrayInputStream input = new ByteArrayInputStream(methodDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
-                requestData = SerializeHelper.deserializeRequest(methodName, iz, resolver);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            requestData = decompressMethodData(resolver, methodName, methodDataZip);
         }
 
         final MetaDataHolder methodMeta = readMetaData(jedis, methodDetailsKey);
 
         final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData, methodMeta);
         return Optional.of(frame);
+    }
+
+    private static Object decompressMethodData(MethodDescriptorResolver resolver, String methodName, byte[] methodDataZip) throws DeserializationException {
+        Object requestData;
+        try (ByteArrayInputStream input = new ByteArrayInputStream(methodDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
+            requestData = SerializeHelper.deserializeRequest(methodName, iz, resolver);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return requestData;
     }
 
 
