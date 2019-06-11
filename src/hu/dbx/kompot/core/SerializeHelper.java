@@ -16,6 +16,8 @@ import hu.dbx.kompot.status.StatusReport;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringBufferInputStream;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -100,6 +102,10 @@ public final class SerializeHelper {
      */
     @SuppressWarnings("unchecked")
     public static Object deserializeContentOnly(String eventName, String content, EventDescriptorResolver resolver) throws DeserializationException {
+        return deserializeContentOnly(eventName, new StringBufferInputStream(content), resolver);
+    }
+
+    public static Object deserializeContentOnly(String eventName, InputStream input, EventDescriptorResolver resolver) throws DeserializationException {
         final Optional<EventDescriptor> marker = resolver.resolveMarker(eventName);
         if (!marker.isPresent()) {
             throw new IllegalArgumentException("Can not get marker for event name " + eventName);
@@ -108,12 +114,13 @@ public final class SerializeHelper {
         final Class targetClass = marker.get().getRequestClass();
 
         try {
-            return (getObjectMapper().readValue(content, targetClass));
+            return (getObjectMapper().readValue(input, targetClass));
         } catch (Exception e) {
             String message = "Could not deserialize payload for event " + eventName + ", class: " + targetClass;
-            throw new DeserializationException(content, message, e);
+            throw new DeserializationException("-", message, e);
         }
     }
+
 
     public static Object deserializeResponse(String content, MethodDescriptor marker) throws DeserializationException {
         final Class targetClass = marker.getResponseClass();
@@ -128,6 +135,10 @@ public final class SerializeHelper {
     }
 
     public static Object deserializeRequest(String methodName, String content, MethodDescriptorResolver resolver) throws DeserializationException {
+        return deserializeRequest(methodName, new StringBufferInputStream(content), resolver);
+    }
+
+    public static Object deserializeRequest(String methodName, InputStream content, MethodDescriptorResolver resolver) throws DeserializationException {
         final Optional<MethodDescriptor> marker = resolver.resolveMarker(methodName);
 
         if (!marker.isPresent()) {
@@ -141,7 +152,7 @@ public final class SerializeHelper {
             return (getObjectMapper().readValue(content, targetClass));
         } catch (Exception e) {
             String message = "Could not deserialize payload for method " + methodName + " class: " + targetClass;
-            throw new DeserializationException(content, message, e);
+            throw new DeserializationException("-", message, e);
         }
     }
 
@@ -168,6 +179,15 @@ public final class SerializeHelper {
             throw new SerializationException(object, "Could not serialize any data", e);
         }
     }
+
+    public static byte[] serializeObjectToBytes(Object object) throws SerializationException {
+        try {
+            return getObjectMapper().writeValueAsBytes(object);
+        } catch (JsonProcessingException e) {
+            throw new SerializationException(object, "Could not serialize any data", e);
+        }
+    }
+
 
     public static MessageErrorResultException deserializeException(String methodDetailsKey, Jedis connection) {
         final String className = connection.hget(methodDetailsKey, EXCEPTION_CLASS.name());
