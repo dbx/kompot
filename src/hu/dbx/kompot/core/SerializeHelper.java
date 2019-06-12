@@ -15,12 +15,14 @@ import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.status.StatusReport;
 import redis.clients.jedis.Jedis;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringBufferInputStream;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.GZIPOutputStream;
 
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.EXCEPTION_CLASS;
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE;
@@ -121,8 +123,12 @@ public final class SerializeHelper {
         }
     }
 
-
     public static Object deserializeResponse(String content, MethodDescriptor marker) throws DeserializationException {
+        return deserializeResponse(new StringBufferInputStream(content), marker);
+    }
+
+
+    public static Object deserializeResponse(InputStream content, MethodDescriptor marker) throws DeserializationException {
         final Class targetClass = marker.getResponseClass();
 
         try {
@@ -130,7 +136,7 @@ public final class SerializeHelper {
             return (getObjectMapper().readValue(content, targetClass));
         } catch (Exception e) {
             String message = "Could not deserialize payload for method " + marker.getMethodName() + ", class: " + targetClass;
-            throw new DeserializationException(content, message, e);
+            throw new DeserializationException("-", message, e);
         }
     }
 
@@ -195,4 +201,16 @@ public final class SerializeHelper {
 
         return new MessageErrorResultException(message, className);
     }
+
+    public static byte[] compressData(Object eventData) {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream(); GZIPOutputStream iz = new GZIPOutputStream(out)) {
+            SerializeHelper.getObjectMapper().writeValue(iz, eventData);
+            iz.close();
+            out.close();
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }

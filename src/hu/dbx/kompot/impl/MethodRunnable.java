@@ -99,7 +99,7 @@ final class MethodRunnable implements Runnable {
         LOGGER.debug("Called method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
 
         // TODO: use multi/exec here to writre statuses and stuff.
-        store.hset(methodKey, DataHandling.MethodResponseKeys.RESPONSE.name(), SerializeHelper.serializeObject(response));
+        store.hset(methodKey.getBytes(), DataHandling.MethodResponseKeys.RESPONSE.name().getBytes(), SerializeHelper.compressData(response));
         store.hset(methodKey, DataHandling.MethodResponseKeys.STATUS.name(), DataHandling.Statuses.PROCESSED.name());
 
         methodEventListeners.forEach(x -> {

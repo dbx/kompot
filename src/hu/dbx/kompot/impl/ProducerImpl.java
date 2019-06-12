@@ -22,15 +22,17 @@ import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPInputStream;
 
 import static hu.dbx.kompot.core.SerializeHelper.deserializeException;
-import static hu.dbx.kompot.core.SerializeHelper.deserializeResponse;
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.STATUS;
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.RESPONSE;
 import static hu.dbx.kompot.impl.DataHandling.*;
@@ -227,10 +229,10 @@ public final class ProducerImpl implements Producer {
                                               CompletableFuture<TRes> response,
                                               Jedis jedis) throws DeserializationException {
         final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
-        final String data = jedis.hget(methodDetailsKey, RESPONSE.name());
+        final byte[] data = jedis.hget(methodDetailsKey.getBytes(), RESPONSE.name().getBytes());
 
         //noinspection unchecked
-        final TRes res = (TRes) deserializeResponse(data, requestFrame.getMethodMarker());
+        final TRes res = (TRes) decompressMethodResponse(data, requestFrame.getMethodMarker());
         methodEventListeners.forEach(methodEventListener -> {
             try {
                 methodEventListener.onResponseReceived(requestFrame, res);
@@ -240,6 +242,17 @@ public final class ProducerImpl implements Producer {
         });
         response.complete(res);
     }
+
+    private static Object decompressMethodResponse(byte[] methodDataZip, MethodDescriptor marker) throws DeserializationException {
+        Object requestData;
+        try (ByteArrayInputStream input = new ByteArrayInputStream(methodDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
+            requestData = SerializeHelper.deserializeResponse(iz, marker);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return requestData;
+    }
+
 
     public void addMethodSendingCallback(MethodSendingCallback listener) throws IllegalArgumentException {
         if (listener == null) {

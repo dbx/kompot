@@ -120,22 +120,10 @@ public final class DataHandling {
         store.hsetnx(eventDetailsKey, UNPROCESSED_GROUPS.name(), Long.toString(groupCount));
 
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
-        store.hsetnx(eventDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(eventFrame.getEventData()));
+        store.hsetnx(eventDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), SerializeHelper.compressData(eventFrame.getEventData()));
 
         LOGGER.debug("Saved event details key.");
     }
-
-    private static byte[] compressData(Object eventData) {
-        try (ByteArrayOutputStream out = new ByteArrayOutputStream(); GZIPOutputStream iz = new GZIPOutputStream(out)) {
-            SerializeHelper.getObjectMapper().writeValue(iz, eventData);
-            iz.close();
-            out.close();
-            return out.toByteArray();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
 
     @SuppressWarnings("WeakerAccess")
     public static String formatGroupsString(Iterable<String> groups) {
@@ -257,7 +245,7 @@ public final class DataHandling {
         // TODO: legyen multi/exec!
         jedis.hset(methodDetailsKey, CODE.name(), frame.getMethodMarker().getMethodName());
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
-        jedis.hset(methodDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(frame.getMethodData()));
+        jedis.hset(methodDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), SerializeHelper.compressData(frame.getMethodData()));
 
         saveMetaData(jedis, frame.getMetaData(), methodDetailsKey);
 

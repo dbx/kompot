@@ -47,7 +47,7 @@ public class DataCompressingTest {
     }
 
 
-    @Ignore
+//    @Ignore
     @Test
     public void methodTest01() throws InterruptedException, TimeoutException, ExecutionException, SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
