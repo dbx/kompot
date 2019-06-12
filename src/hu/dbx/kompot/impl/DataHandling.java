@@ -257,7 +257,7 @@ public final class DataHandling {
         // TODO: legyen multi/exec!
         jedis.hset(methodDetailsKey, CODE.name(), frame.getMethodMarker().getMethodName());
         jedis.hset(methodDetailsKey, SENDER.name(), frame.getSourceIdentifier());
-        jedis.hset(methodDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(frame.getMetaData()));
+        jedis.hset(methodDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), compressData(frame.getMethodData()));
 
         saveMetaData(jedis, frame.getMetaData(), methodDetailsKey);
 

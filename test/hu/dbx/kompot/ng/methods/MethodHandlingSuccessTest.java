@@ -64,8 +64,9 @@ public class MethodHandlingSuccessTest {
     private CommunicationEndpoint startConsumer(ExecutorService executor) {
         final CommunicationEndpoint consumer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), MethodHandlingSuccessTest.consumerIdentity, executor);
 
-        consumer.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD_1, x -> {
+        consumer.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD_1, (Map x) -> {
             LOGGER.info("Processing " + x);
+            assertEquals(11, x.get("aa"));
             return singletonMap("a", 1);
         }));
 
