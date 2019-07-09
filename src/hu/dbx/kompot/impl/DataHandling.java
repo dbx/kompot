@@ -17,13 +17,11 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.StreamSupport;
 import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.*;
 import static java.lang.String.join;
@@ -122,7 +120,7 @@ public final class DataHandling {
         saveMetaData(store, eventFrame.getMetaData(), eventDetailsKey);
         store.hsetnx(eventDetailsKey.getBytes(), DATA_ZIP.name().getBytes(), SerializeHelper.compressData(eventFrame.getEventData()));
 
-        LOGGER.debug("Saved event details key.");
+        LOGGER.trace("Saved event details key.");
     }
 
     @SuppressWarnings("WeakerAccess")
@@ -191,6 +189,7 @@ public final class DataHandling {
         LOGGER.debug("Loading event details under key {}", eventDetailsKey);
 
         final String eventName = jedis.hget(eventDetailsKey, CODE.name());
+        final String eventSender = jedis.hget(eventDetailsKey, SENDER.name());
 
         final String eventData = jedis.hget(eventDetailsKey, DATA.name());
         final byte[] eventDataZip = jedis.hget(eventDetailsKey.getBytes(), DATA_ZIP.name().getBytes());
@@ -219,7 +218,7 @@ public final class DataHandling {
             response.setEventMarker(eventMarker.get());
             response.setEventData(eventDataObj);
             response.setIdentifier(eventUuid);
-            response.setSourceIdentifier(null); // did not set now.
+            response.setSourceIdentifier(eventSender);
             response.setMetaData(readMetaData(jedis, eventDetailsKey));
             return response;
         }
@@ -285,7 +284,13 @@ public final class DataHandling {
 
         final MetaDataHolder methodMeta = readMetaData(jedis, methodDetailsKey);
 
-        final MethodRequestFrame frame = MethodRequestFrame.build(methodUuid, ProducerIdentity.constantly(sender), descriptor.get(), requestData, methodMeta);
+        final MethodRequestFrame frame = MethodRequestFrame.build(
+                methodUuid,
+                new ProducerIdentity.CustomIdentity(sender),
+                descriptor.get(),
+                requestData,
+                methodMeta);
+
         return Optional.of(frame);
     }
 

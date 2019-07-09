@@ -95,9 +95,7 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
         } else if (channel.startsWith("e:")) {
             startEventProcessing(UUID.fromString(message));
         } else if (channel.startsWith("m:")) {                 // uzenet keres
-            LOGGER.debug("Received message bang {} on channel {}, trying to start method.", message, channel);
-            //noinspection unused
-            final String methodName = channel.substring(2);
+            LOGGER.trace("Received message {} on channel {}, trying to start method.", message, channel);
             try {
                 MethodRunnable runnable = new MethodRunnable(ConsumerImpl.this, consumerConfig, methodEventListeners, consumerHandlers, UUID.fromString(message));
                 submitToExecutor(runnable);
@@ -119,7 +117,7 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
         startLatch.await();
 
         // we start processing earlier events.
-        LOGGER.debug("started daemon thread.");
+        LOGGER.trace("started daemon thread.");
 
         // ez fogja a modul statuszat rendszeresen beleirni.
         SelfStatusWriter.start(consumerConfig);
@@ -278,11 +276,11 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
         @Override
         public void run() {
             try {
-                LOGGER.info("Started trampoline.");
+                LOGGER.trace("Started trampoline.");
                 while (trampoline != null) {
                     trampoline = trampoline.jump();
                 }
-                LOGGER.info("Exited trampoline.");
+                LOGGER.trace("Exited trampoline.");
             } catch (Throwable t) {
                 LOGGER.error("Error on trampoline=" + trampoline, t);
             }

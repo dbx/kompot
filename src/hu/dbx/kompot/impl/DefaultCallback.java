@@ -99,7 +99,7 @@ final class DefaultCallback implements EventStatusCallback {
     }
 
     private void writeStatus(final DataHandling.Statuses status) {
-        LOGGER.debug("Writing status {} for event {}/{} of consumer {}", status, eventId, consumerIdentity.getEventGroup(), consumerIdentity.getIdentifier());
+//        LOGGER.debug("Writing status {} for event {}/{} of consumer {}", status, eventId, consumerIdentity.getEventGroup(), consumerIdentity.getIdentifier());
 
         final String groupName = consumerIdentity.getEventGroup();
         final String eventGroupDetailsKey = keyNaming.eventDetailsKey(groupName, eventId);
@@ -132,7 +132,7 @@ final class DefaultCallback implements EventStatusCallback {
 
             multi.exec();
         } finally {
-            LOGGER.debug("Written status {} for event", status);
+            LOGGER.trace("Written status {} for event", status);
         }
     }
 }

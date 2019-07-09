@@ -84,7 +84,8 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
             }
 
             callback.markProcessing();
-            LOGGER.debug("Started processing event uuid={}", eventUuid);
+            LOGGER.trace("Started processing event uuid={}", eventUuid);
+            LOGGER.info("Processing event {}/{} meta={} uuid={}", frame.getSourceIdentifier(), frame.getEventMarker().getEventName(), frame.getMetaData(), eventUuid);
 
             for (EventReceivingCallback eventReceivingCallback : eventReceivingCallbacks) {
                 try {
@@ -96,7 +97,7 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
 
             consumer.getEventProcessorAdapter().handle(frame.getEventMarker(), frame.getMetaData(), frame.getEventData(), callback);
 
-            LOGGER.debug("Processed event uuid={}", eventUuid);
+            LOGGER.info("Processed event {}/{} uuid={}", frame.getSourceIdentifier(), frame.getEventMarker().getEventName(), eventUuid);
 
             // az a gond, hogy a processingEventsCounter a finally-ban csokkentve lesz, de itt nem.
             return new AfterEventRunnable(consumer, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks);

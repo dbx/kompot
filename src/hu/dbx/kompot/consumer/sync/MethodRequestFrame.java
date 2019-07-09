@@ -48,8 +48,8 @@ public final class MethodRequestFrame<Req> {
     }
 
     @SuppressWarnings("unchecked")
-    public static <Req> MethodRequestFrame<Req> build(ConsumerIdentity sender, MethodDescriptor<Req, ?> marker, Req request, MetaDataHolder metaData) {
-        return new MethodRequestFrame(UUID.randomUUID(), marker, request, sender.getIdentifier(), metaData);
+    public static <Req> MethodRequestFrame<Req> build(ConsumerIdentity senderConsumer, MethodDescriptor<Req, ?> marker, Req request, MetaDataHolder metaData) {
+        return new MethodRequestFrame(UUID.randomUUID(), marker, request, senderConsumer.getIdentifier(), metaData);
     }
 
     public MethodDescriptor<Req, ?> getMethodMarker() {

@@ -92,11 +92,14 @@ final class MethodRunnable implements Runnable {
                 LOGGER.error("Error when running method sending event listener {} for method {}", x, methodUuid);
             }
         });
-        LOGGER.debug("Calling method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
 
+        LOGGER.info("Received method calling from {} to {}/{} with meta {}",
+                mrf.getMetaData().getSourceName(), methodMarker.getMethodGroupName(), methodMarker.getMethodName(), mrf.getMetaData());
+
+        LOGGER.trace("Calling method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
         //noinspection unchecked
         final Object response = consumer.getMethodProcessorAdapter().call(methodMarker, mrf.getMethodData(), mrf.getMetaData());
-        LOGGER.debug("Called method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
+        LOGGER.trace("Called method processor for {}/{}", methodMarker.getMethodGroupName(), methodMarker.getMethodName());
 
         // TODO: use multi/exec here to writre statuses and stuff.
         store.hset(methodKey.getBytes(), DataHandling.MethodResponseKeys.RESPONSE.name().getBytes(), SerializeHelper.compressData(response));
@@ -111,8 +114,7 @@ final class MethodRunnable implements Runnable {
             }
         });
 
-        LOGGER.debug("Written response to method {}/{} to {}",
-                methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
+        LOGGER.debug("Written response to method {}/{} to {}", methodMarker.getMethodGroupName(), methodMarker.getMethodName(), methodKey);
     }
 
     /**
@@ -158,7 +160,7 @@ final class MethodRunnable implements Runnable {
      */
     private boolean steal(Jedis store) {
         final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
-        LOGGER.debug("Trying to steal from {}", methodUuid);
+        LOGGER.trace("Trying to steal from {}", methodUuid);
         return 0 != store.hsetnx(methodKey, "owner", consumer.getConsumerIdentity().getIdentifier());
     }
 

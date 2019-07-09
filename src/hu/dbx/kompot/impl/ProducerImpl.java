@@ -56,12 +56,14 @@ public final class ProducerImpl implements Producer {
     }
 
     @Override
-    public <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request, MetaDataHolder metaData) throws SerializationException {
+    public <TReq> void sendEvent(EventDescriptor<TReq> marker, TReq request, MetaDataHolder metaData) {
         if (null == marker) {
             throw new NullPointerException("Event marker is null!");
         } else if (null == request) {
             throw new NullPointerException("Request object is null for marker of: " + marker.getEventName());
         }
+
+        LOGGER.info("Sending event {} with meta {}", marker.getEventName(), metaData);
 
         final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData);
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
@@ -80,7 +82,9 @@ public final class ProducerImpl implements Producer {
             eventGroups.forEach(group -> transaction.publish("e:" + group, eventFrame.getIdentifier().toString()));
 
             transaction.exec();
-            LOGGER.debug("Called exec on {}", eventFrame.debugSignature());
+            LOGGER.trace("Called exec on {}", eventFrame.debugSignature());
+
+            LOGGER.info("Sent event {}", marker.getEventName());
         }
 
         eventSendingEventListeners.forEach(eventListener -> {
@@ -104,6 +108,8 @@ public final class ProducerImpl implements Producer {
         } else if (methodData == null) {
             throw new IllegalArgumentException("Can not send message " + marker.getMethodName() + " for empty data!");
         }
+
+        LOGGER.info("Sending method {} with meta {}", marker.getMethodName(), metaData);
 
         // make request object
         final MethodRequestFrame<TReq> requestFrame = MethodRequestFrame.build(consumer.getConsumerIdentity(), marker, methodData, metaData);

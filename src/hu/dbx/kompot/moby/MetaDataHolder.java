@@ -1,5 +1,7 @@
 package hu.dbx.kompot.moby;
 
+import org.apache.commons.lang3.builder.ToStringStyle;
+
 import java.util.UUID;
 
 public final class MetaDataHolder {
@@ -99,5 +101,16 @@ public final class MetaDataHolder {
 
     public UUID getFeedbackUuid() {
         return feedbackUuid;
+    }
+
+    @Override
+    public String toString() {
+        return new org.apache.commons.lang3.builder.ToStringBuilder(this, ToStringStyle.NO_CLASS_NAME_STYLE)
+                .append("correlationId", correlationId)
+                .append("userRef", userRef)
+                .append("sourceName", sourceName)
+                .append("batchId", batchId)
+                .append("feedbackUuid", feedbackUuid)
+                .toString();
     }
 }

@@ -63,18 +63,36 @@ public final class CommunicationEndpoint {
     /**
      * Constructs a new instance with a default executor service.
      */
-    public static CommunicationEndpoint ofRedisConnectionUri(URI connection, EventGroupProvider groups, ConsumerIdentity serverIdentity) {
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity) {
         return ofRedisConnectionUri(connection, groups, serverIdentity, Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS));
+    }
+
+    @Deprecated
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             ExecutorService executor) {
+        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(), executor);
     }
 
     /**
      * Constructs a new instance with a custom executor serviec.
      */
-    public static CommunicationEndpoint ofRedisConnectionUri(URI connection, EventGroupProvider groups, ConsumerIdentity serverIdentity, ExecutorService executor) {
-        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, ProducerIdentity.randomUuidIdentity(), executor);
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             ProducerIdentity producerIdentity,
+                                                             ExecutorService executor) {
+        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, producerIdentity, executor);
     }
 
-    private CommunicationEndpoint(JedisPool pool, EventGroupProvider groups, ConsumerIdentity serverIdentity, ProducerIdentity producerIdentity, ExecutorService executor) {
+    private CommunicationEndpoint(JedisPool pool,
+                                  EventGroupProvider groups,
+                                  ConsumerIdentity serverIdentity,
+                                  ProducerIdentity producerIdentity,
+                                  ExecutorService executor) {
 
         final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         final ConsumerConfig consumerConfig = new ConsumerConfig(executor, scheduledExecutor, serverIdentity, pool, naming);
