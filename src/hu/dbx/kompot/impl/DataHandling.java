@@ -16,8 +16,10 @@ import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.StreamSupport;
@@ -30,7 +32,7 @@ public final class DataHandling {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
     public static final String GROUP_SEPARATOR_CHAR = ",";
-
+    private static final int MAX_ENTITY_SIZE = 8 * 1024;
 
     public enum EventKeys {
 
@@ -227,7 +229,7 @@ public final class DataHandling {
     private static Object decompressEventData(EventDescriptorResolver eventResolver, String eventName, byte[] eventDataZip) throws DeserializationException {
         Object eventDataObj;
         try (ByteArrayInputStream input = new ByteArrayInputStream(eventDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
-            eventDataObj = SerializeHelper.deserializeContentOnly(eventName, iz, eventResolver);
+            eventDataObj = SerializeHelper.deserializeContentOnly(eventName, logEntityStream(iz), eventResolver);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -297,7 +299,7 @@ public final class DataHandling {
     private static Object decompressMethodData(MethodDescriptorResolver resolver, String methodName, byte[] methodDataZip) throws DeserializationException {
         Object requestData;
         try (ByteArrayInputStream input = new ByteArrayInputStream(methodDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
-            requestData = SerializeHelper.deserializeRequest(methodName, iz, resolver);
+            requestData = SerializeHelper.deserializeRequest(methodName, logEntityStream(iz), resolver);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -344,4 +346,30 @@ public final class DataHandling {
 
         return meta;
     }
+
+    private static InputStream logEntityStream(InputStream stream) throws IOException {
+        final StringBuilder builder = new StringBuilder();
+
+        builder.append("DataEntity:\n");
+
+        if (!stream.markSupported()) {
+            stream = new BufferedInputStream(stream);
+        }
+        stream.mark(MAX_ENTITY_SIZE + 1);
+        final byte[] entity = new byte[MAX_ENTITY_SIZE + 1];
+        final int entitySize = stream.read(entity);
+        if (entitySize > 0) {
+            builder.append(new String(entity, 0, Math.min(entitySize, MAX_ENTITY_SIZE)));
+            if (entitySize > MAX_ENTITY_SIZE) {
+                builder.append("...more...");
+            }
+            builder.append('\n');
+        }
+        stream.reset();
+
+        LOGGER.info(builder.toString());
+
+        return stream;
+    }
+
 }
