@@ -2,6 +2,7 @@ package hu.dbx.kompot.consumer.async;
 
 import hu.dbx.kompot.moby.MetaDataHolder;
 
+import java.util.Collection;
 import java.util.UUID;
 
 /**
@@ -37,12 +38,19 @@ public class EventFrame<Req> {
      */
     private UUID identifier = UUID.randomUUID();
 
-    public static <Req> EventFrame<Req> build(EventDescriptor<Req> marker, Req request, MetaDataHolder metaData) {
+    /**
+     * The list of modules subscribed to this event
+     */
+    private Iterable<String> eventGroups;
+
+
+    public static <Req> EventFrame<Req> build(EventDescriptor<Req> marker, Req request, MetaDataHolder metaData, Iterable<String> eventGroups) {
         final EventFrame<Req> eventFrame = new EventFrame<>();
         eventFrame.setEventMarker(marker);
         eventFrame.setEventData(request);
         eventFrame.setIdentifier(UUID.randomUUID());
         eventFrame.setMetaData(metaData);
+        eventFrame.setEventGroups(eventGroups);
         return eventFrame;
     }
 
@@ -84,6 +92,14 @@ public class EventFrame<Req> {
 
     public void setMetaData(MetaDataHolder metaData) {
         this.metaData = metaData;
+    }
+
+    public Iterable<String> getEventGroups() {
+        return eventGroups;
+    }
+
+    public void setEventGroups(Iterable<String> eventGroups) {
+        this.eventGroups = eventGroups;
     }
 
     @Override

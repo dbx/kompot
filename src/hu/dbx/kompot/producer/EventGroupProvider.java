@@ -3,6 +3,7 @@ package hu.dbx.kompot.producer;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 
 import java.util.Arrays;
+import java.util.Collection;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;

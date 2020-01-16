@@ -65,9 +65,17 @@ public final class ProducerImpl implements Producer {
 
         LOGGER.info("Sending event {} with meta {}", marker.getEventName(), metaData);
 
-        final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData);
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
+        final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData, eventGroups);
         final Priority priority = marker.getPriority();
+
+        eventSendingEventListeners.forEach(eventListener -> {
+            try {
+                eventListener.beforeEventSent(eventFrame);
+            } catch (Throwable t) {
+                LOGGER.error("Exception when handling beforeEventSent on listener \" + eventListener + \" for " + eventFrame.debugSignature(), t);
+            }
+        });
 
         try (Jedis jedis = producerConfig.getPool().getResource()) {
             Transaction transaction = jedis.multi();
@@ -91,7 +99,7 @@ public final class ProducerImpl implements Producer {
             try {
                 eventListener.onEventSent(eventFrame);
             } catch (Throwable t) {
-                LOGGER.error("Exception when handling onEventSent event for " + eventFrame.debugSignature(), t);
+                LOGGER.error("Exception when handling onEventSent on listener \" + eventListener + \" for " + eventFrame.debugSignature(), t);
             }
         });
     }

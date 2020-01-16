@@ -4,6 +4,8 @@ import hu.dbx.kompot.CommunicationEndpoint;
 import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
+import hu.dbx.kompot.consumer.async.EventFrame;
+import hu.dbx.kompot.consumer.async.EventSendingCallback;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.DataHandling;
@@ -57,7 +59,17 @@ public class QuerySingleEventTest {
         final Reporting reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
-        producer.registerEventSendingCallback(frame -> sentEventUuid[0] = frame.getIdentifier());
+        producer.registerEventSendingCallback(new EventSendingCallback() {
+            @Override
+            public void onEventSent(EventFrame frame) {
+                sentEventUuid[0] = frame.getIdentifier();
+            }
+
+            @Override
+            public void beforeEventSent(EventFrame frame) {
+
+            }
+        });
         producer.start();
         producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
         producer.stop();
@@ -93,7 +105,17 @@ public class QuerySingleEventTest {
         final Reporting reporting = Reporting.ofRedisConnectionUri(redis.getConnectionURI(), DefaultKeyNaming.ofPrefix("moby"));
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
-        producer.registerEventSendingCallback(frame -> sentEventUuid.set(frame.getIdentifier()));
+        producer.registerEventSendingCallback(new EventSendingCallback() {
+            @Override
+            public void onEventSent(EventFrame frame) {
+                sentEventUuid.set(frame.getIdentifier());
+            }
+
+            @Override
+            public void beforeEventSent(EventFrame frame) {
+
+            }
+        });
         producer.start();
         producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
         producer.stop();

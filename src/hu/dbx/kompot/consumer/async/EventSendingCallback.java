@@ -7,4 +7,9 @@ public interface EventSendingCallback {
      */
     void onEventSent(EventFrame frame);
 
+    /**
+     * Event bill be sent
+     */
+    void beforeEventSent(EventFrame frame);
+
 }
