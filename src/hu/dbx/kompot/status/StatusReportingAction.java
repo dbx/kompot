@@ -78,7 +78,7 @@ public class StatusReportingAction {
     public List<StatusReport> findGlobalStatuses() {
 
         // wait for one module.
-        final int MODULE_TIMEOUT_SECS = 10;
+        final int MODULE_TIMEOUT_SECS = 20;
 
         try (Jedis jedis = consumer.getConsumerConfig().getPool().getResource()) {
             final Set<String> ks = SelfStatusWriter.findStatusKeys(jedis, consumer.getKeyNaming());
