@@ -367,9 +367,31 @@ public final class DataHandling {
         }
         stream.reset();
 
-        LOGGER.info(builder.toString());
+        final String s = filterOutPassword(builder.toString());
+        LOGGER.info(s);
 
         return stream;
+    }
+
+    public static String filterOutPassword(String input) {
+        final StringBuilder builder = new StringBuilder();
+        if (input.toLowerCase().contains("\"password\"")) {
+            final String[] split = input.toLowerCase().split("\"password\"");
+            if (split.length != 0) {
+                final int beforePassword = split[0].length() + 10;
+                builder.append(input, 0, beforePassword);
+                builder.append(":");
+                builder.append(" <FILTERED>");
+                final String[] passwordSplit = split[1].split("\"");
+                final int afterPassword = passwordSplit[0].length() + 1 + passwordSplit[1].length() + 1;
+                builder.append(input.substring(beforePassword + afterPassword));
+                return builder.toString();
+            } else {
+                return input;
+            }
+        } else {
+            return input;
+        }
     }
 
 }
