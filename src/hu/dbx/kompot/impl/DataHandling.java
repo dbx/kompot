@@ -382,9 +382,11 @@ public final class DataHandling {
                 builder.append(input, 0, beforePassword);
                 builder.append(":");
                 builder.append(" <FILTERED>");
-                final String[] passwordSplit = split[1].split("\"");
-                final int afterPassword = passwordSplit[0].length() + 1 + passwordSplit[1].length() + 1;
-                builder.append(input.substring(beforePassword + afterPassword));
+
+                int passwordEndIndex = getPasswordEndIndexFromJson(split[1]);
+                // add first character after password ("," or "}")
+                builder.append(split[1].charAt(passwordEndIndex));
+                builder.append(input.substring(beforePassword + passwordEndIndex + 1));
                 return builder.toString();
             } else {
                 return input;
@@ -392,6 +394,20 @@ public final class DataHandling {
         } else {
             return input;
         }
+    }
+
+    private static int getPasswordEndIndexFromJson(String afterPasswordKey) {
+        // password is not the last property
+        final int commaIndex = afterPasswordKey.indexOf(",");
+        // password is the last property
+        final int jsonEndIndex = afterPasswordKey.indexOf("}");
+        int passwordEndIndex;
+        if (commaIndex > 0 && jsonEndIndex > 0) {
+            passwordEndIndex = Math.min(commaIndex, jsonEndIndex);
+        } else {
+            passwordEndIndex = Math.max(commaIndex, jsonEndIndex);
+        }
+        return passwordEndIndex;
     }
 
 }
