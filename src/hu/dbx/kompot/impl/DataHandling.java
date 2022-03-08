@@ -367,47 +367,30 @@ public final class DataHandling {
         }
         stream.reset();
 
-        final String s = filterOutPassword(builder.toString());
+        final String s = filterSensitiveDataOutFromMessage(builder.toString());
         LOGGER.info(s);
 
         return stream;
     }
 
-    public static String filterOutPassword(String input) {
-        final StringBuilder builder = new StringBuilder();
-        if (input.toLowerCase().contains("\"password\"")) {
-            final String[] split = input.toLowerCase().split("\"password\"");
-            if (split.length != 0) {
-                final int beforePassword = split[0].length() + 10;
-                builder.append(input, 0, beforePassword);
-                builder.append(":");
-                builder.append(" <FILTERED>");
-
-                int passwordEndIndex = getPasswordEndIndexFromJson(split[1]);
-                // add first character after password ("," or "}")
-                builder.append(split[1].charAt(passwordEndIndex));
-                builder.append(input.substring(beforePassword + passwordEndIndex + 1));
-                return builder.toString();
-            } else {
-                return input;
-            }
-        } else {
-            return input;
+    public static String filterSensitiveDataOutFromMessage(String message) {
+        final List<String> sensitiveDataKeysToFilterBy = Arrays.asList("password", "cardId");
+        for (String key : sensitiveDataKeysToFilterBy) {
+            message = filterByKeyword(key, message);
         }
+
+        return message;
     }
 
-    private static int getPasswordEndIndexFromJson(String afterPasswordKey) {
-        // password is not the last property
-        final int commaIndex = afterPasswordKey.indexOf(",");
-        // password is the last property
-        final int jsonEndIndex = afterPasswordKey.indexOf("}");
-        int passwordEndIndex;
-        if (commaIndex > 0 && jsonEndIndex > 0) {
-            passwordEndIndex = Math.min(commaIndex, jsonEndIndex);
-        } else {
-            passwordEndIndex = Math.max(commaIndex, jsonEndIndex);
-        }
-        return passwordEndIndex;
+    /**
+     * Filters out the value of a key in a json(or map)-like string.
+     * Examples:
+     * 1) "password": "asd123" -> "password": <FILTERED>
+     * 2) password=asd123 -> password=<FILTERED>
+     */
+    private static String filterByKeyword(final String keyword, final String requestString) {
+        return requestString.replaceAll("(?is)(\"?" + keyword + "\"?\\s*[:=]\\s*)(\"?)([^\"?,}\\s]*)(\"?)", "$1<FILTERED>");
     }
+
 
 }
