@@ -5,7 +5,7 @@
     <groupId>hu.dbx</groupId>
     <artifactId>kompot</artifactId>
     <packaging>jar</packaging>
-    <version>0.4.8</version>
+    <version>0.4.9</version>
     <name>kompot</name>
     <description>Message queuing for human use.</description>
     <properties>

@@ -31,7 +31,7 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
      * Maximum number of event processing threads.
      * TODO: make it configurable!
      */
-    private static final int MAX_EVENTS = 8;
+    private static final int MAX_EVENTS = 6;
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     /**
