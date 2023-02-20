@@ -5,13 +5,11 @@ import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
-import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
+import java.net.URI;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -35,6 +33,9 @@ import static junit.framework.TestCase.assertEquals;
  */
 public class LotsOfQuickEventHandlingTest {
 
+    @Rule
+    public final TestRedis redis = TestRedis.build();
+
 
     private static final int EVENT_COUNT = 1000;
     private static final String EVENT_NAME = UUID.randomUUID().toString();
@@ -43,25 +44,21 @@ public class LotsOfQuickEventHandlingTest {
     private static final String RECEIVER_GROUP = "RECEIVER_GROUP";
     private static final EventGroupProvider PROVIDER = EventGroupProvider.constantly(RECEIVER_GROUP);
 
-    @Before
-    public void before() throws IOException, URISyntaxException {
-        new TestRedis().before();
-    }
-
     @Test
     public void testMassiveEventsQuickPostprocess() throws Exception {
         final CountDownLatch remainingEvents = new CountDownLatch(EVENT_COUNT);
 
-        sendInitialEvents();
+        final URI redisUri = redis.getConnectionURI();
+        sendInitialEvents(redisUri);
 
         // state 2 - processing all events from multiple agents
-        consumeInitialEvents(remainingEvents);
+        consumeInitialEvents(redisUri, remainingEvents);
 
         assertEquals(0L, remainingEvents.getCount());
     }
 
-    private static void consumeInitialEvents(CountDownLatch remainingEvents) throws IOException, URISyntaxException, InterruptedException, SerializationException {
-        final CommunicationEndpoint receiver = CommunicationEndpoint.ofRedisConnectionUri(new TestRedis().getConnectionURI(), PROVIDER, groupGroup(RECEIVER_GROUP));
+    private static void consumeInitialEvents(final URI redisUri, CountDownLatch remainingEvents) throws InterruptedException {
+        final CommunicationEndpoint receiver = CommunicationEndpoint.ofRedisConnectionUri(redisUri, PROVIDER, groupGroup(RECEIVER_GROUP));
         receiver.registerEventHandler(SelfDescribingEventProcessor.of(EVENT1,
                 (x) -> {
                     // this handler is extremely quick
@@ -82,15 +79,13 @@ public class LotsOfQuickEventHandlingTest {
     /**
      * Send an initial set of events.
      */
-    private static void sendInitialEvents() throws IOException, URISyntaxException, hu.dbx.kompot.exceptions.SerializationException, InterruptedException {
-        final TestRedis redis = new TestRedis();
-
+    private static void sendInitialEvents(final URI redisUri) throws hu.dbx.kompot.exceptions.SerializationException, InterruptedException {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
 
         // stage 1 - sending all events
 
         final ConsumerIdentity senderIdentity = groupGroup("Sender");
-        final CommunicationEndpoint sender = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), PROVIDER, senderIdentity, executor);
+        final CommunicationEndpoint sender = CommunicationEndpoint.ofRedisConnectionUri(redisUri, PROVIDER, senderIdentity, executor);
         sender.start();
         for (int i = 0; i < EVENT_COUNT; i++) {
             sender.asyncSendEvent(EVENT1, singletonMap("a", 2));

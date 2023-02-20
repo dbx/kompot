@@ -10,72 +10,110 @@ import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.producer.EventGroupProvider;
+import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.*;
 
+@SuppressWarnings("java:S2925")
 public class MassiveTest {
 
-    public static final int AGENT_COUNT = 10, EVENT_COUNT = 100, MESSAGE_COUNT = 100, BROADCAST_COUNT = 100;
+    private static final Logger LOGGER = LoggerFactory.getLogger(MassiveTest.class);
 
+    public static final int AGENT_COUNT = 10, EVENT_COUNT = 110, MESSAGE_COUNT = 120, BROADCAST_COUNT = 130;
+
+    @Rule
+    public final TestRedis redis = TestRedis.build();
 
     @Test
     public void test() throws InterruptedException {
 
-        final CountDownLatch agentsLatch = new CountDownLatch(AGENT_COUNT);
+        final CountDownLatch readyLatch = new CountDownLatch(AGENT_COUNT); // agents are ready to process messages
+        final CountDownLatch startLatch = new CountDownLatch(1); // agents should start processing messages
+        final CountDownLatch runningLatch = new CountDownLatch(AGENT_COUNT); // agents finished processing messages
 
         final ExecutorService service = Executors.newFixedThreadPool(AGENT_COUNT);
 
-        final AtomicInteger allEvents = new AtomicInteger(AGENT_COUNT * (EVENT_COUNT + MESSAGE_COUNT + BROADCAST_COUNT));
+        final URI redisUri = redis.getConnectionURI();
+
+        final AtomicInteger processedEvents = new AtomicInteger(0);
+        final AtomicInteger processedMethods = new AtomicInteger(0);
+        final AtomicInteger processedBroadcasts = new AtomicInteger(0);
+
 
         for (int i = 0; i < AGENT_COUNT; i++) {
-            service.submit(new Agent(agentsLatch, i, allEvents));
+            service.submit(new Agent(redisUri, readyLatch, startLatch, runningLatch, i, processedEvents, processedMethods, processedBroadcasts));
         }
 
-        agentsLatch.await();
+        readyLatch.await();
+        startLatch.countDown();
+
+        LOGGER.debug("Waiting for agents to finish");
+        service.shutdown();
+        service.awaitTermination(300, TimeUnit.SECONDS);
+
+        LOGGER.debug("Agents finished");
+
+        Assert.assertEquals("Unexpected processed event count", AGENT_COUNT * EVENT_COUNT, processedEvents.get());
+        Assert.assertEquals("Unexpected processed method count", AGENT_COUNT * MESSAGE_COUNT, processedMethods.get());
+        //every agent broadcasts to the other half of the agents: the two group sizes are (AGENT_COUNT / 2) and (AGENT_COUNT - AGENT_COUNT / 2) (odd agent count can cause the groups to be uneven)
+        Assert.assertEquals("Unexpected processed broadcast count",
+                2 * (AGENT_COUNT - AGENT_COUNT / 2) * (AGENT_COUNT / 2) * BROADCAST_COUNT, processedBroadcasts.get());
+
     }
 
 
-    private final class Agent implements Callable, ConsumerIdentity {
+    private static final class Agent implements Callable, ConsumerIdentity {
 
-        Agent(CountDownLatch latch, int nr, AtomicInteger allEvents) {
-            this.agentsLatch = latch;
+        Agent(final URI redisUri, final CountDownLatch readyLatch, CountDownLatch startLatch, CountDownLatch runningLatch, int nr, AtomicInteger processedEvents, final AtomicInteger processedMethods, final AtomicInteger processedBroadcasts) {
+            this.redisUri = redisUri;
+            this.readyLatch = readyLatch;
+            this.startLatch = startLatch;
+            this.runningLatch = runningLatch;
             this.nr = nr;
-            this.allEvents = allEvents;
+            this.processedEvents = processedEvents;
+            this.processedMethods = processedMethods;
+            this.processedBroadcasts = processedBroadcasts;
         }
 
 
-        final CountDownLatch agentsLatch;
+        private final URI redisUri;
+        private final CountDownLatch readyLatch;
+        private final CountDownLatch startLatch;
+        final CountDownLatch runningLatch;
         final int nr;
-        final AtomicInteger allEvents;
+        final AtomicInteger processedEvents;
+        private final AtomicInteger processedMethods;
+        private final AtomicInteger processedBroadcasts;
+
+        private final AtomicBoolean messageReceived = new AtomicBoolean(true); //if we receive a message, we set this flag true
 
         @Override
         public Object call() throws Exception {
 
-            TestRedis redis = new TestRedis();
-
-            redis.before();
-
-            CommunicationEndpoint endpoint = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), PROVIDER, this);
+            CommunicationEndpoint endpoint = CommunicationEndpoint.ofRedisConnectionUri(redisUri, PROVIDER, this);
 
             // feliratkozik egy random esemenyre
             endpoint.registerEventHandler(SelfDescribingEventProcessor.of(EVENT.get(nr % 2), (data) -> {
                 try {
+                    messageReceived.set(true);
                     Thread.sleep((long) (Math.random() * 100));
 
-                    int remaining = allEvents.decrementAndGet();
+                    int eventNo = processedEvents.incrementAndGet();
 
-                    System.out.println("Executed event!" + remaining);
+                    LOGGER.debug("Executed event #{}", eventNo);
 
                     if (Math.random() < 0.1) throw new RuntimeException("Kacsa.");
                 } catch (InterruptedException e) {
@@ -86,11 +124,12 @@ public class MassiveTest {
             // feliratkozik egy random esemenyre
             endpoint.registerBroadcastProcessor(SelfDescribingBroadcastProcessor.of(BROADCAST.get(nr % 2), (data) -> {
                 try {
+                    messageReceived.set(true);
                     Thread.sleep((long) (Math.random() * 100));
 
-                    int remaining = allEvents.decrementAndGet();
+                    int broadcastNo = processedBroadcasts.incrementAndGet();
 
-                    System.out.println("Executed broadcast!" + remaining);
+                    LOGGER.debug("Executed broadcast #{}", broadcastNo);
 
                     if (Math.random() < 0.1) throw new RuntimeException("Kacsa.");
 
@@ -101,13 +140,16 @@ public class MassiveTest {
 
             endpoint.registerMethodProcessor(SelfDescribingMethodProcessor.of(METHOD.get(nr % 2), (data) -> {
                 try {
+                    messageReceived.set(true);
                     Thread.sleep((long) (Math.random() * 100));
 
-                    int remaining = allEvents.decrementAndGet();
+                    int methodNo = processedMethods.incrementAndGet();
 
-                    System.out.println("Executed method!" + remaining);
+                    LOGGER.debug("Executed method #{}", methodNo);
 
-                    if (Math.random() < 0.1) throw new RuntimeException("Kacsa.");
+                    if (Math.random() < 0.1) {
+                        throw new RuntimeException("Kacsa.");
+                    }
 
                     return emptyMap();
                 } catch (InterruptedException e) {
@@ -117,23 +159,29 @@ public class MassiveTest {
 
             endpoint.start();
 
+            readyLatch.countDown();
+            startLatch.await();
+
+
             for (int i = 0; i < EVENT_COUNT; i++) {
-                Thread.sleep(100);
                 endpoint.asyncSendEvent(EVENT.get((nr + 1) % 2), emptyMap());
+            }
+            for (int i = 0; i < MESSAGE_COUNT; i++) {
                 endpoint.syncCallMethod(METHOD.get((nr + 1) % 2), singletonMap("ali", "baba"));
+            }
+            for (int i = 0; i < BROADCAST_COUNT; i++) {
                 endpoint.broadcast(BROADCAST.get((nr + 1) % 2), singletonMap("bc", 23));
             }
 
-            while (allEvents.get() > nr * (EVENT_COUNT + MESSAGE_COUNT + BROADCAST_COUNT)) {
-                Thread.sleep(100);
+            //wait for messages to be all processed (no message received in 300ms)
+            while (messageReceived.getAndSet(false)) {
+                Thread.sleep(300);
             }
 
             endpoint.stop();
-            redis.after();
+            runningLatch.countDown();
 
-            agentsLatch.countDown();
-
-            System.out.println("Exited agent. still running: " + agentsLatch.getCount());
+            System.out.println("Exited agent. still running: " + runningLatch.getCount());
             return null;
         }
 
