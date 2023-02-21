@@ -1,22 +1,19 @@
 package hu.dbx.kompot.ng.reports;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
-import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.EventFilters;
 import hu.dbx.kompot.report.ListResult;
 import hu.dbx.kompot.report.Pagination;
 import hu.dbx.kompot.report.Reporting;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 
 import java.util.Map;
@@ -28,15 +25,12 @@ import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 
-public class QueryEventsTest {
+public class QueryEventsTest extends AbstractRedisTest {
 
     private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT2", Map.class);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
     private static final Pagination THOUSAND = Pagination.fromOffsetAndLimit(0, 1000);
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     @Before
     public void cleanup() {

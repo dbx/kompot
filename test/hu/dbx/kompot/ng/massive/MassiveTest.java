@@ -1,7 +1,6 @@
 package hu.dbx.kompot.ng.massive;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
@@ -9,9 +8,9 @@ import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,16 +25,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.*;
+import static org.awaitility.Awaitility.await;
 
 @SuppressWarnings("java:S2925")
-public class MassiveTest {
+public class MassiveTest extends AbstractRedisTest {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MassiveTest.class);
 
     public static final int AGENT_COUNT = 10, EVENT_COUNT = 110, MESSAGE_COUNT = 120, BROADCAST_COUNT = 130;
-
-    @Rule
-    public final TestRedis redis = TestRedis.build();
 
     @Test
     public void test() throws InterruptedException {
@@ -62,7 +59,7 @@ public class MassiveTest {
 
         LOGGER.debug("Waiting for agents to finish");
         service.shutdown();
-        service.awaitTermination(300, TimeUnit.SECONDS);
+        await("Executor should terminate").atMost(300, TimeUnit.SECONDS).until(service::isTerminated);
 
         LOGGER.debug("Agents finished");
 

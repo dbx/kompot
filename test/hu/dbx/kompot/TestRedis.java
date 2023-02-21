@@ -27,14 +27,14 @@ public class TestRedis extends ExternalResource {
         return new TestRedis();
     }
 
-    public TestRedis() {
+    private TestRedis() {
         try {
             if (System.getenv().containsKey(ENV_KEY)) {
                 redis = null;
                 uri = new URI(System.getenv(ENV_KEY));
             } else {
                 LOGGER.debug("Initializing redis docker container");
-                redis = new GenericContainer(DockerImageName.parse("redis:7.0.8-alpine"))
+                redis = new GenericContainer(DockerImageName.parse("redis:5.0.3-alpine"))
                         .withExposedPorts(6379);
                 redis.start();
                 uri = new URI("redis://" + redis.getHost() + ":" + redis.getMappedPort(6379) + "/13");
@@ -46,10 +46,6 @@ public class TestRedis extends ExternalResource {
 
     @Override
     public void before() {
-        if (redis != null && !redis.isRunning()) {
-            LOGGER.debug("Starting redis");
-            redis.start();
-        }
         pool = new JedisPool(uri);
         try (Jedis jedis = pool.getResource()) {
             LOGGER.trace(jedis.info());
@@ -59,10 +55,6 @@ public class TestRedis extends ExternalResource {
 
     @Override
     public void after() {
-        if (redis != null && redis.isRunning()) {
-            LOGGER.debug("Stopping redis container");
-            redis.stop();
-        }
         pool.close();
     }
 

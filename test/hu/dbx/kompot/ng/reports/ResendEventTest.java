@@ -2,7 +2,6 @@ package hu.dbx.kompot.ng.reports;
 
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.EventFrame;
@@ -12,10 +11,10 @@ import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
 import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.Reporting;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
@@ -24,14 +23,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
+import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @SuppressWarnings("ConstantConditions")
-public class ResendEventTest {
+public class ResendEventTest extends AbstractRedisTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
@@ -40,9 +42,6 @@ public class ResendEventTest {
     private static final ConsumerIdentity consumerIdentity = groupGroup(CONSUMER_CODE);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
 
-    @Rule
-    public TestRedis redis = TestRedis.build();
-
     @Before
     public void before() {
         try (Jedis jedis = redis.getJedisPool().getResource()) {
@@ -50,7 +49,7 @@ public class ResendEventTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void invalidResendStateUnprocessedTest() throws SerializationException {
 
         TestInit testInit = new TestInit().invoke();
@@ -59,10 +58,10 @@ public class ResendEventTest {
 
         assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid, CONSUMER_CODE);
+        assertThrows(IllegalArgumentException.class, () -> reporting.resendEvent(sentEventUuid, CONSUMER_CODE));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void invalidResendStateProcessedTest() throws SerializationException, InterruptedException {
 
         TestInit testInit = new TestInit().invoke();
@@ -73,12 +72,12 @@ public class ResendEventTest {
         consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> callback.success(":)")));
 
         consumer.start();
-        Thread.sleep(500);
+        await("Consumer should run at least 500 ms").during(500, TimeUnit.MILLISECONDS).atMost(1, TimeUnit.SECONDS).until(consumer::isRunning);
         consumer.stop();
 
         assertEquals(DataHandling.Statuses.PROCESSED, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
 
-        reporting.resendEvent(sentEventUuid, CONSUMER_CODE);
+        assertThrows(IllegalArgumentException.class, () -> reporting.resendEvent(sentEventUuid, CONSUMER_CODE));
     }
 
     @Test
@@ -92,7 +91,7 @@ public class ResendEventTest {
         consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> LOGGER.info("Nem csinálok semmit!")));
 
         consumer.start();
-        Thread.sleep(500);
+        await("Consumer should run at least 500 ms").during(500, TimeUnit.MILLISECONDS).atMost(1, TimeUnit.SECONDS).until(consumer::isRunning);
         consumer.stop();
 
         assertEquals(DataHandling.Statuses.PROCESSING, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());
@@ -103,7 +102,7 @@ public class ResendEventTest {
     }
 
     @Test
-    public void resendErroneousEvent() throws SerializationException, InterruptedException {
+    public void resendErroneousEvent() throws SerializationException {
 
         TestInit testInit = new TestInit().invoke();
         UUID sentEventUuid = testInit.getSentEventUuid();
@@ -113,7 +112,7 @@ public class ResendEventTest {
         consumer.registerEventHandler(SelfDescribingEventProcessor.of(EVENT_1, (data, meta, callback) -> callback.error(":'(")));
 
         consumer.start();
-        Thread.sleep(500);
+        await("Consumer should run at least 500 ms").during(500, TimeUnit.MILLISECONDS).atMost(1, TimeUnit.SECONDS).until(consumer::isRunning);
         consumer.stop();
 
         assertEquals(DataHandling.Statuses.ERROR, reporting.querySingleEvent(CONSUMER_CODE, sentEventUuid).get().getStatus());

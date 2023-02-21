@@ -1,35 +1,33 @@
 package hu.dbx.kompot.ng.status;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.HashSet;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.fromGroups;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static junit.framework.TestCase.*;
+import static org.awaitility.Awaitility.await;
 
 /**
  * A tuloldalon kivetel kepzodott.
  */
 @SuppressWarnings("unchecked")
-public class StatusReportTest {
+public class StatusReportTest extends AbstractRedisTest {
 
     private static final ConsumerIdentity consumerIdentity = fromGroups("EGROUP", "MGROUP");
 
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     @Test
     public void testFindsOwnStatusReporter() throws InterruptedException {
@@ -40,10 +38,12 @@ public class StatusReportTest {
 
         consumer.start();
 
-        // TODO: what if i remove the sleep here: why does it fail?
-        Thread.sleep(2000L);
-        final List<StatusReport> statuses = consumer.findGlobalStatuses();
+        await().during(1, TimeUnit.SECONDS).atMost(2, TimeUnit.SECONDS).until(() -> {
+            final List<StatusReport> statuses = consumer.findGlobalStatuses();
+            return statuses.size() == 1;
+        });
 
+        final List<StatusReport> statuses = consumer.findGlobalStatuses();
         assertEquals(1, statuses.size());
 
 
@@ -82,8 +82,10 @@ public class StatusReportTest {
 
         consumer.start();
 
-        // TODO: what if i remove the sleep here: why does it fail?
-        Thread.sleep(2000L);
+        await().during(1, TimeUnit.SECONDS).atMost(2, TimeUnit.SECONDS).until(() -> {
+            final List<StatusReport> statuses = consumer.findGlobalStatuses();
+            return statuses.size() == 1;
+        });
         final List<StatusReport> statuses = consumer.findGlobalStatuses();
 
         assertEquals(1, statuses.size());

@@ -1,12 +1,11 @@
 package hu.dbx.kompot.ng.massive;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.net.URI;
@@ -31,11 +30,7 @@ import static junit.framework.TestCase.assertEquals;
  * <p>
  * We check here for race conditions. On some occasions events used to get stuck when event processing was too quick.
  */
-public class LotsOfQuickEventHandlingTest {
-
-    @Rule
-    public final TestRedis redis = TestRedis.build();
-
+public class LotsOfQuickEventHandlingTest extends AbstractRedisTest {
 
     private static final int EVENT_COUNT = 1000;
     private static final String EVENT_NAME = UUID.randomUUID().toString();
@@ -90,7 +85,8 @@ public class LotsOfQuickEventHandlingTest {
         for (int i = 0; i < EVENT_COUNT; i++) {
             sender.asyncSendEvent(EVENT1, singletonMap("a", 2));
         }
-        executor.awaitTermination(6, TimeUnit.SECONDS);
         sender.stop();
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
     }
 }
