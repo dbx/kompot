@@ -4,6 +4,7 @@ import hu.dbx.kompot.impl.LoggerUtils;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -35,7 +36,8 @@ public class TestRedis extends ExternalResource {
             } else {
                 LOGGER.debug("Initializing redis docker container");
                 redis = new GenericContainer(DockerImageName.parse("redis:5.0.3-alpine"))
-                        .withExposedPorts(6379);
+                        .withExposedPorts(6379)
+                        .waitingFor(Wait.forListeningPort());
                 redis.start();
                 uri = new URI("redis://" + redis.getHost() + ":" + redis.getMappedPort(6379) + "/13");
             }
