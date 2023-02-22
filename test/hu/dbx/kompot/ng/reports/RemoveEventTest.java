@@ -12,30 +12,19 @@ import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.Reporting;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
-import redis.clients.jedis.Jedis;
 
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
-import static java.util.Collections.singletonMap;
 
 public class RemoveEventTest extends AbstractRedisTest {
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT3", Map.class);
+    private static final EventDescriptor<String> EVENT_1 = EventDescriptor.of("EVENT3", String.class);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
-
-    @Before
-    public void before() {
-        try (Jedis jedis = redis.getJedisPool().getResource()) {
-            jedis.flushDB();
-        }
-    }
 
     @Test
     public void removeEvent() throws SerializationException {
@@ -58,7 +47,7 @@ public class RemoveEventTest extends AbstractRedisTest {
             }
         });
         producer.start();
-        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
+        producer.asyncSendEvent(EVENT_1, "aa");
         producer.stop();
 
         Assert.assertEquals(DataHandling.Statuses.CREATED, reporting.querySingleEvent("EVENT3", sentEventUuid.get()).get().getStatus());

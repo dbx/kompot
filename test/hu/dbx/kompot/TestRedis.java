@@ -4,10 +4,10 @@ import hu.dbx.kompot.impl.LoggerUtils;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPool;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -18,11 +18,9 @@ import java.net.URISyntaxException;
 public class TestRedis extends ExternalResource {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    private final GenericContainer redis;
+    private final GenericContainer<?> redis;
 
     private final URI uri;
-    private JedisPool pool;
-
     private static final String ENV_KEY = "KOMPOT_REDIS_URI";
     public static TestRedis build() {
         return new TestRedis();
@@ -35,9 +33,10 @@ public class TestRedis extends ExternalResource {
                 uri = new URI(System.getenv(ENV_KEY));
             } else {
                 LOGGER.debug("Initializing redis docker container");
-                redis = new GenericContainer(DockerImageName.parse("redis:5.0.3-alpine"))
+                redis = new GenericContainer<>(DockerImageName.parse("redis:5.0.3-alpine"))
                         .withExposedPorts(6379)
-                        .waitingFor(Wait.forListeningPort());
+                        .waitingFor(Wait.forListeningPort())
+                        .withLogConsumer(new Slf4jLogConsumer(LOGGER).withPrefix("REDIS"));
                 redis.start();
                 uri = new URI("redis://" + redis.getHost() + ":" + redis.getMappedPort(6379) + "/13");
             }
@@ -48,20 +47,11 @@ public class TestRedis extends ExternalResource {
 
     @Override
     public void before() {
-        pool = new JedisPool(uri);
-        try (Jedis jedis = pool.getResource()) {
+        //flush the db
+        try (Jedis jedis = new Jedis(uri)) {
             LOGGER.trace(jedis.info());
             jedis.flushDB();
         }
-    }
-
-    @Override
-    public void after() {
-        pool.close();
-    }
-
-    public JedisPool getJedisPool() {
-        return pool;
     }
 
     public URI getConnectionURI() {

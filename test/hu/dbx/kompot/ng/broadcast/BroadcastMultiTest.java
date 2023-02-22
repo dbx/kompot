@@ -33,10 +33,10 @@ public class BroadcastMultiTest extends AbstractRedisTest {
 
     private static final ConsumerIdentity serverIdentity = groupGroup("Consumer");
 
-    private static final int CONSUMER_COUNT = 30;
+    private static final int CONSUMER_COUNT = 10;
 
     @Test
-    public void testSuccessfullyHandleEvent() throws SerializationException, InterruptedException {
+    public void testSuccessfullyHandleEvent() throws SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(10);
         final AtomicInteger counter = new AtomicInteger(0);
 

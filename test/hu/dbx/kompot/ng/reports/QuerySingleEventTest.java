@@ -15,11 +15,8 @@ import hu.dbx.kompot.report.EventData;
 import hu.dbx.kompot.report.EventGroupData;
 import hu.dbx.kompot.report.Reporting;
 import org.hamcrest.Matchers;
-import org.junit.Before;
 import org.junit.Test;
-import redis.clients.jedis.Jedis;
 
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -28,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
-import static java.util.Collections.singletonMap;
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.*;
 
@@ -36,16 +32,9 @@ public class QuerySingleEventTest extends AbstractRedisTest {
 
     private static final String EVENT_NAME = "TEST_EVENT_" + QuerySingleEventTest.class.getName();
 
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of(EVENT_NAME, Map.class);
+    private static final EventDescriptor<String> EVENT_1 = EventDescriptor.of(EVENT_NAME, String.class);
     private static final ConsumerIdentity consumerIdentity = groupGroup(EVENT_NAME);
     private static final ConsumerIdentity producerIdentity = groupGroup("EVENTP");
-
-    @Before
-    public void before() {
-        try (Jedis jedis = redis.getJedisPool().getResource()) {
-            jedis.flushDB();
-        }
-    }
 
     /**
      * Egy konkrét esemény adatainak lekérdezése. Az esemény UUID-ját az eseményküldés callbackből szedjük ki
@@ -70,7 +59,7 @@ public class QuerySingleEventTest extends AbstractRedisTest {
             }
         });
         producer.start();
-        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
+        producer.asyncSendEvent(EVENT_1, "aa");
         producer.stop();
 
         assertNotNull(sentEventUuid[0]);
@@ -96,7 +85,7 @@ public class QuerySingleEventTest extends AbstractRedisTest {
      * Egy konkrét esemény életciklusának végigjátszása
      */
     @Test
-    public void querySingleEventLifecycle() throws SerializationException, InterruptedException {
+    public void querySingleEventLifecycle() throws SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
         final AtomicReference<UUID> sentEventUuid = new AtomicReference<>();
 
@@ -116,7 +105,7 @@ public class QuerySingleEventTest extends AbstractRedisTest {
             }
         });
         producer.start();
-        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
+        producer.asyncSendEvent(EVENT_1, "aa");
         producer.stop();
 
         final UUID sentUUID = await("Sent event uuid should be set").atMost(1, TimeUnit.SECONDS).untilAtomic(sentEventUuid, Matchers.notNullValue());
