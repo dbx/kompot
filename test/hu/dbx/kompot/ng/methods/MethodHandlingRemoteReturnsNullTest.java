@@ -1,13 +1,12 @@
 package hu.dbx.kompot.ng.methods;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Map;
@@ -19,14 +18,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 @SuppressWarnings("unchecked")
-public class MethodHandlingRemoteReturnsNullTest {
+public class MethodHandlingRemoteReturnsNullTest extends AbstractRedisTest {
 
     private static final MethodDescriptor METHOD_1 = MethodDescriptor.ofName("GROUP1", "method1");
     private static final ConsumerIdentity consumerIdentity = groupGroup("GROUP1");
     private static final ConsumerIdentity producerIdentity = groupGroup("GROUP2");
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     /**
      * When response is a null value then we receive it.

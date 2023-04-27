@@ -1,14 +1,16 @@
 package hu.dbx.kompot.ng.compressing;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import org.slf4j.Logger;
 
 import java.util.*;
@@ -16,9 +18,10 @@ import java.util.concurrent.*;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
+import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
 
-public class DataCompressingTest {
+public class DataCompressingTest extends AbstractRedisTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
@@ -30,9 +33,6 @@ public class DataCompressingTest {
     private static final String ROOT_KEY = "root";
     private static final String DATA1 = buildBigData('1');
     private static final String DATA2 = buildBigData('2');
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     private List<Map.Entry<String, Long>> memoryTestResults;
 
@@ -61,7 +61,7 @@ public class DataCompressingTest {
         System.gc();
         registerMemoryUsage("1");
 
-        Thread.sleep(1000);
+        await("Consumer should run at least 1 second").during(1, TimeUnit.SECONDS).atMost(2, TimeUnit.SECONDS).until(() -> consumer.isRunning());
         @SuppressWarnings("unchecked")
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap(ROOT_KEY, DATA1));
 

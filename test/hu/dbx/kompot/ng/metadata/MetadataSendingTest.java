@@ -1,7 +1,6 @@
 package hu.dbx.kompot.ng.metadata;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
@@ -10,8 +9,9 @@ import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.moby.MetaDataHolder;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Rule;
+import org.hamcrest.Matchers;
 import org.junit.Test;
 import org.slf4j.Logger;
 
@@ -21,11 +21,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.awaitility.Awaitility.await;
+import static org.junit.Assert.*;
 
-public class MetadataSendingTest {
+public class MetadataSendingTest extends AbstractRedisTest {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
@@ -34,11 +33,8 @@ public class MetadataSendingTest {
     private static final ConsumerIdentity consumerIdentity = groupGroup("CONSUMER");
     private static final ConsumerIdentity producerIdentity = groupGroup("PRODUCER");
 
-    @Rule
-    public TestRedis redis = TestRedis.build();
-
     @Test
-    public void testEventMetadataSending() throws InterruptedException, SerializationException {
+    public void testEventMetadataSending() throws SerializationException {
         final ExecutorService executor = Executors.newFixedThreadPool(4);
 
         AtomicReference<MetaDataHolder> outputMeta = new AtomicReference<>();
@@ -57,9 +53,7 @@ public class MetadataSendingTest {
 
         producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0), MetaDataHolder.build("corri", "usrR", "srcN",  42L));
 
-        Thread.sleep(1000);
-
-        assertNotNull(outputMeta.get());
+        await("Output meta should be set").atMost(3, TimeUnit.SECONDS).untilAtomic(outputMeta, Matchers.notNullValue());
         assertEquals("corri", outputMeta.get().getCorrelationId());
         assertEquals("usrR", outputMeta.get().getUserRef());
         assertEquals("srcN", outputMeta.get().getSourceName());
@@ -68,8 +62,7 @@ public class MetadataSendingTest {
         producer.stop();
         consumer.stop();
         executor.shutdown();
-        executor.awaitTermination(10, TimeUnit.SECONDS);
-
+        await("Executor should be terminated").atMost(3, TimeUnit.SECONDS).until(executor::isTerminated);
     }
 
     @Test
@@ -93,7 +86,8 @@ public class MetadataSendingTest {
 
         consumer.start();
 
-        Thread.sleep(1000);
+        await("Consumer should run at least 0.5 second").during(500, TimeUnit.MILLISECONDS).atMost(2, TimeUnit.SECONDS).until(() -> consumer.isRunning());
+
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11), MetaDataHolder.build("xxx", "yyy", "sss", null));
 
         assertEquals(1, response.get(3, TimeUnit.SECONDS).get("a"));

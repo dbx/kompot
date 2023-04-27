@@ -163,12 +163,12 @@ public final class DataHandling {
         }
     }
 
+    private static final long PRIORITY_LEVEL_WEIGHT_OFFSET = 1L << 35; //kb 400 nap (millisecben)
+
     public static void zaddNow(Transaction tx, String sortedSetKey, Priority priority, byte[] value) {
-        long start = 1532092223L; // 2018 july
         long now = System.currentTimeMillis();
 
-        // TODO: test different weight functions!
-        double weight = ((double) start - now) - start * priority.score;
+        double weight = now - priority.score * PRIORITY_LEVEL_WEIGHT_OFFSET;
         tx.zadd(sortedSetKey.getBytes(), weight, value);
     }
 

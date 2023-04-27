@@ -74,7 +74,7 @@ public final class CommunicationEndpoint {
                                                              EventGroupProvider groups,
                                                              ConsumerIdentity serverIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(), executor);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(), executor);
     }
 
     /**
@@ -85,20 +85,22 @@ public final class CommunicationEndpoint {
                                                              ConsumerIdentity serverIdentity,
                                                              ProducerIdentity producerIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, producerIdentity, executor);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, producerIdentity, executor);
     }
 
-    private CommunicationEndpoint(JedisPool pool,
+    private CommunicationEndpoint(URI connection,
                                   EventGroupProvider groups,
                                   ConsumerIdentity serverIdentity,
                                   ProducerIdentity producerIdentity,
                                   ExecutorService executor) {
 
         final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
-        final ConsumerConfig consumerConfig = new ConsumerConfig(executor, scheduledExecutor, serverIdentity, pool, naming);
+        final ConsumerConfig consumerConfig =
+                new ConsumerConfig(executor, scheduledExecutor, serverIdentity, new JedisPool(connection), naming);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
-        final ProducerConfig producerConfig = new ProducerConfig(executor, scheduledExecutor, pool, naming, producerIdentity);
+        final ProducerConfig producerConfig =
+                new ProducerConfig(executor, scheduledExecutor, new JedisPool(connection), naming, producerIdentity);
 
         this.consumer = new ConsumerImpl(consumerConfig, handlers);
         this.producer = new ProducerImpl(producerConfig, groups, this.consumer);

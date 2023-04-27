@@ -1,15 +1,14 @@
 package hu.dbx.kompot.ng.methods;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
-import org.junit.Rule;
 import org.junit.Test;
 import org.slf4j.Logger;
 
@@ -18,10 +17,11 @@ import java.util.concurrent.*;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
+import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
 
 @SuppressWarnings("unchecked")
-public class MethodHandlingSuccessTest {
+public class MethodHandlingSuccessTest extends AbstractRedisTest {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     private static final MethodDescriptor METHOD_1 = MethodDescriptor.ofName("MOD_TARGET", "METHOD1");
@@ -30,9 +30,6 @@ public class MethodHandlingSuccessTest {
     private static final ConsumerIdentity sourceConsumerIdentity = groupGroup("MOD_SOURCE");
     private static final ProducerIdentity sourceProducerIdentity = new ProducerIdentity.DetailedIdentity("MOD_SOURCE", "v1");
 
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     /**
      * Valaszolunk a metodus hivasra
@@ -56,7 +53,7 @@ public class MethodHandlingSuccessTest {
 
         final CommunicationEndpoint consumer = startConsumer(executor);
 
-        Thread.sleep(1000);
+        await("Consumer should run at least half second").during(500, TimeUnit.MILLISECONDS).atMost(2, TimeUnit.SECONDS).until(() -> consumer.isRunning());
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100_000), singletonMap("aa", 11));
 
         assertEquals(1, response.get(3, TimeUnit.SECONDS).get("a"));
