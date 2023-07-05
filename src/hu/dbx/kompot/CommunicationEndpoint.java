@@ -48,6 +48,7 @@ public final class CommunicationEndpoint {
 
     public static final int DEFAULT_EXECUTOR_THREADS = 12;
     public static final List<String> DEFAULT_LOG_SENSITIVE_DATA_KEYS = emptyList();
+    public static final int DEFAULT_MAX_EVENT_THREAD_COUNT = 3;
 
     private final DefaultEventProcessorAdapter events = new DefaultEventProcessorAdapter();
     private final DefaultMethodProcessorAdapter methods = new DefaultMethodProcessorAdapter();
@@ -69,7 +70,16 @@ public final class CommunicationEndpoint {
     public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
                                                              EventGroupProvider groups,
                                                              ConsumerIdentity serverIdentity) {
-        return ofRedisConnectionUri(connection, groups, serverIdentity, Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS));
+        return ofRedisConnectionUri(connection, groups, serverIdentity,
+                Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS));
+    }
+
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             int maxEventThreadCount) {
+        return ofRedisConnectionUri(connection, groups, serverIdentity,
+                Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS), DEFAULT_LOG_SENSITIVE_DATA_KEYS, maxEventThreadCount);
     }
 
     @Deprecated
@@ -77,7 +87,8 @@ public final class CommunicationEndpoint {
                                                              EventGroupProvider groups,
                                                              ConsumerIdentity serverIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(), executor, DEFAULT_LOG_SENSITIVE_DATA_KEYS);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                executor, DEFAULT_LOG_SENSITIVE_DATA_KEYS, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
     /**
@@ -88,7 +99,8 @@ public final class CommunicationEndpoint {
                                                              ConsumerIdentity serverIdentity,
                                                              ProducerIdentity producerIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, producerIdentity, executor, DEFAULT_LOG_SENSITIVE_DATA_KEYS);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, producerIdentity, executor,
+                DEFAULT_LOG_SENSITIVE_DATA_KEYS, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
     /**
@@ -99,7 +111,18 @@ public final class CommunicationEndpoint {
                                                              ConsumerIdentity serverIdentity,
                                                              ExecutorService executor,
                                                              List<String> logSensitiveDataKeys) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(), executor, logSensitiveDataKeys);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                executor, logSensitiveDataKeys, DEFAULT_MAX_EVENT_THREAD_COUNT);
+    }
+
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             ExecutorService executor,
+                                                             List<String> logSensitiveDataKeys,
+                                                             int maxEventThreadCount) {
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                executor, logSensitiveDataKeys, maxEventThreadCount);
     }
 
     private CommunicationEndpoint(URI connection,
@@ -107,11 +130,12 @@ public final class CommunicationEndpoint {
                                   ConsumerIdentity serverIdentity,
                                   ProducerIdentity producerIdentity,
                                   ExecutorService executor,
-                                  List<String> logSensitiveDataKeys) {
+                                  List<String> logSensitiveDataKeys,
+                                  int maxEventThreadCount) {
 
         final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         final ConsumerConfig consumerConfig =
-                new ConsumerConfig(executor, scheduledExecutor, serverIdentity, new JedisPool(connection), naming, logSensitiveDataKeys);
+                new ConsumerConfig(executor, scheduledExecutor, serverIdentity, new JedisPool(connection), naming, logSensitiveDataKeys, maxEventThreadCount);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
         final ProducerConfig producerConfig =

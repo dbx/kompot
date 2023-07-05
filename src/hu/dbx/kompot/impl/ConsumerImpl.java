@@ -31,7 +31,6 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
      * Maximum number of event processing threads.
      * TODO: make it configurable!
      */
-    private static final int MAX_EVENTS = 3;
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     /**
@@ -123,7 +122,7 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
         SelfStatusWriter.start(consumerConfig);
 
         // There may be unprocessed events in the queue so we start to process it on as many threads as possible
-        for (int i = 1; i < MAX_EVENTS + 1; i++) {
+        for (int i = 1; i < consumerConfig.getMaxEventThreadCount() + 1; i++) {
             // csak azert noveljuk, mert az after event runnable csokkenteni fogja!
             processingEvents.incrementAndGet();
 
@@ -199,7 +198,7 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
             this.data = data;
         }
 
-        @SuppressWarnings("unchecked")
+        @SuppressWarnings({"unchecked", "rawtypes"})
         @Override
         public void run() {
             final Optional<BroadcastDescriptor> descriptor = consumerHandlers.getBroadcastDescriptorResolver().resolveMarker(broadcastCode);
@@ -239,7 +238,7 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
     private void startEventProcessing(UUID eventUuid) {
         if (eventUuid == null) {
             throw new IllegalArgumentException("can not start processing event will null uuid!");
-        } else if (processingEvents.incrementAndGet() <= MAX_EVENTS) {
+        } else if (processingEvents.incrementAndGet() <= consumerConfig.getMaxEventThreadCount()) {
             try {
                 submitToExecutorTrampoline(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks));
             } catch (RejectedExecutionException e) {

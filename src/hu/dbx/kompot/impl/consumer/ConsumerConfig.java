@@ -19,19 +19,22 @@ public final class ConsumerConfig {
     private final JedisPool pool;
     private final KeyNaming naming;
     private final List<String> logSensitiveDataKeys;
+    private final int maxEventThreadCount;
 
     public ConsumerConfig(Executor executor,
                           ScheduledExecutorService scheduledExecutor,
                           ConsumerIdentity consumerIdentity,
                           JedisPool jedisPool,
                           KeyNaming keyNaming,
-                          List<String> logSensitiveDataKeys) {
+                          List<String> logSensitiveDataKeys,
+                          int maxEventThreadCount) {
         this.executor = executor;
         this.scheduledExecutor = scheduledExecutor;
         this.identity = consumerIdentity;
         this.pool = jedisPool;
         this.naming = keyNaming;
         this.logSensitiveDataKeys = logSensitiveDataKeys;
+        this.maxEventThreadCount = maxEventThreadCount;
     }
 
     public Executor getExecutor() {
@@ -56,5 +59,9 @@ public final class ConsumerConfig {
 
     public List<String> getLogSensitiveDataKeys() {
         return logSensitiveDataKeys;
+    }
+
+    public int getMaxEventThreadCount() {
+        return maxEventThreadCount;
     }
 }
