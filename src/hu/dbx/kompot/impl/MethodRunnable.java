@@ -47,11 +47,14 @@ final class MethodRunnable implements Runnable {
                 // some other instance has already took this item, we do nothing
             } else {
 
+                //noinspection rawtypes
                 MethodRequestFrame mrf = null;
 
                 // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar enyem az ownership.
                 try {
-                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
+                    //noinspection rawtypes
+                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(),
+                            consumerHandlers.getMethodDescriptorResolver(), methodUuid, consumerConfig.getLogSensitiveDataKeys());
 
                     if (frameOp.isPresent()) {
                         mrf = frameOp.get();
@@ -78,8 +81,9 @@ final class MethodRunnable implements Runnable {
         }
     }
 
-    private void process(Jedis store, MethodRequestFrame mrf) {
+    private void process(Jedis store, @SuppressWarnings("rawtypes") MethodRequestFrame mrf) {
 
+        //noinspection rawtypes
         final MethodDescriptor methodMarker = mrf.getMethodMarker();
 
         store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(methodMarker.getMethodGroupName()), mrf.getIdentifier().toString());
@@ -119,7 +123,7 @@ final class MethodRunnable implements Runnable {
     /**
      * On case of failures we run callbacks and write failure code.
      */
-    private void callFailureListeners(MethodRequestFrame mrf, Throwable t) {
+    private void callFailureListeners(@SuppressWarnings("rawtypes") MethodRequestFrame mrf, Throwable t) {
         methodEventListeners.forEach(x -> {
             try {
                 x.onRequestProcessingFailure(mrf, t);
