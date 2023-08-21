@@ -38,6 +38,7 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
         try {
             final DefaultCallback callback = new DefaultCallback(consumerConfig.getPool(), eventUuid, consumer.getKeyNaming(), consumer.getConsumerIdentity(), eventReceivingCallbacks);
 
+            //noinspection rawtypes
             final EventFrame frame;
             try (final Jedis store = consumerConfig.getPool().getResource()) {
 
@@ -58,7 +59,8 @@ final class EventRunnable implements ConsumerImpl.Trampoline {
                     store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode), eventUuid.toString());
 
                     try {
-                        frame = DataHandling.readEventFrame(store, consumer.getKeyNaming(), consumerHandlers.getEventResolver(), eventUuid);
+                        frame = DataHandling.readEventFrame(store, consumer.getKeyNaming(),
+                                consumerHandlers.getEventResolver(), eventUuid, consumerConfig.getLogSensitiveDataKeys());
                         callback.setFrame(frame);
                     } catch (IllegalArgumentException e) {
                         // did not find event details under kiven key in db

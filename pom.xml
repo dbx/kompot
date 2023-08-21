@@ -5,7 +5,7 @@
     <groupId>hu.dbx</groupId>
     <artifactId>kompot</artifactId>
     <packaging>jar</packaging>
-    <version>0.4.12-SNAPSHOT</version>
+    <version>0.4.13</version>
     <name>kompot</name>
     <description>Message queuing for human use.</description>
     <properties>
@@ -85,6 +85,7 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>

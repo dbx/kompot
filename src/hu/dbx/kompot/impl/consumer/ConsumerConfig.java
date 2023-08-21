@@ -4,6 +4,7 @@ import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.core.KeyNaming;
 import redis.clients.jedis.JedisPool;
 
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -17,13 +18,20 @@ public final class ConsumerConfig {
     private final ConsumerIdentity identity;
     private final JedisPool pool;
     private final KeyNaming naming;
+    private final List<String> logSensitiveDataKeys;
 
-    public ConsumerConfig(Executor executor, ScheduledExecutorService scheduledExecutor, ConsumerIdentity consumerIdentity, JedisPool jedisPool, KeyNaming keyNaming) {
+    public ConsumerConfig(Executor executor,
+                          ScheduledExecutorService scheduledExecutor,
+                          ConsumerIdentity consumerIdentity,
+                          JedisPool jedisPool,
+                          KeyNaming keyNaming,
+                          List<String> logSensitiveDataKeys) {
         this.executor = executor;
         this.scheduledExecutor = scheduledExecutor;
         this.identity = consumerIdentity;
         this.pool = jedisPool;
         this.naming = keyNaming;
+        this.logSensitiveDataKeys = logSensitiveDataKeys;
     }
 
     public Executor getExecutor() {
@@ -44,5 +52,9 @@ public final class ConsumerConfig {
 
     public ScheduledExecutorService getScheduledExecutor() {
         return scheduledExecutor;
+    }
+
+    public List<String> getLogSensitiveDataKeys() {
+        return logSensitiveDataKeys;
     }
 }
