@@ -3,9 +3,9 @@ package hu.dbx.kompot.status;
 import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.ScanParams;
-import redis.clients.jedis.ScanResult;
 import redis.clients.jedis.Transaction;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.resps.ScanResult;
 
 import java.util.Date;
 import java.util.HashSet;

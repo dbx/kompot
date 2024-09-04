@@ -1,13 +1,12 @@
 package hu.dbx.kompot.ng.methods;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Map;
@@ -16,8 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
-import static junit.framework.TestCase.assertFalse;
 import static junit.framework.TestCase.assertTrue;
+import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -25,14 +24,11 @@ import static org.junit.Assert.fail;
  * Nem fut a szerver, csak a kliens. Timeout Exception-nal meg fogunk allni.
  */
 @SuppressWarnings("unchecked")
-public class MethodHandlingTimeoutTest {
+public class MethodHandlingTimeoutTest extends AbstractRedisTest {
 
     private static final MethodDescriptor METHOD_1 = MethodDescriptor.ofName("GROUP2", "method1");
     private static final ConsumerIdentity consumerIdentity = groupGroup("GROUP2");
     private static final ConsumerIdentity producerIdentity = groupGroup("PRODUCER");
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     /**
      * A producer szinkron üzenetet küld, amit senki sem dolgoz fel az adott (100ms) timeouton belül. A visszaadott future cancelled állapotba kerül.
@@ -45,12 +41,11 @@ public class MethodHandlingTimeoutTest {
         producer.start();
 
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100), singletonMap("aa", 11));
-        executor.awaitTermination(1, TimeUnit.SECONDS);
 
-        assertTrue(response.isCancelled());
-
+        await("Response should get cancelled").atMost(1, TimeUnit.SECONDS).until(response::isCancelled);
         producer.stop();
         executor.shutdown();
+        await("Executor should terminate").atMost(1, TimeUnit.SECONDS).until(executor::isTerminated);
     }
 
     /**
@@ -69,19 +64,15 @@ public class MethodHandlingTimeoutTest {
         CompletableFuture<Map> response2 = producer.syncCallMethod(METHOD_1.withTimeout(2000), singletonMap("aa", 11));
         CompletableFuture<Map> response3 = producer.syncCallMethod(METHOD_1.withTimeout(4000), singletonMap("aa", 11));
 
-        executor.awaitTermination(1, TimeUnit.SECONDS);
-
-        assertTrue(response.isCancelled());
-        assertFalse(response2.isCancelled());
-        assertFalse(response3.isCancelled());
-
-        executor.awaitTermination(1, TimeUnit.SECONDS);
-
-        assertTrue(response2.isCancelled());
-        assertFalse(response3.isCancelled());
+        await("First response should cancel in 100ms").atMost(200, TimeUnit.MILLISECONDS).until(response::isCancelled);
+        await("Response 2 should not cancel too early").during(1400, TimeUnit.MILLISECONDS).until(() -> !response2.isCancelled());
+        await("Response 2 should cancel").atMost(600, TimeUnit.MILLISECONDS).until(response2::isCancelled);
+        await("Response 3 should not cancel too early").during(1500, TimeUnit.MILLISECONDS).until(() -> !response3.isCancelled());
+        await("Response 3 should cancel").atMost(600, TimeUnit.MILLISECONDS).until(response2::isCancelled);
 
         producer.stop();
         executor.shutdown();
+        await("Executor should terminate").atMost(1, TimeUnit.SECONDS).until(executor::isTerminated);
     }
 
     /**
@@ -111,7 +102,8 @@ public class MethodHandlingTimeoutTest {
         producer.start();
 
         // itt csak megvarjuk, amig elindul a valaszolo fel.
-        Thread.sleep(1000);
+        await("Counsumer should start processing").atMost(1, TimeUnit.SECONDS).until(consumer::isRunning);
+
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(100), singletonMap("aa", 11));
 
         try {
@@ -127,6 +119,7 @@ public class MethodHandlingTimeoutTest {
         producer.stop();
         consumer.stop();
         executor.shutdown();
+        await("Executor should terminate").atMost(3, TimeUnit.SECONDS).until(executor::isTerminated);
     }
 
 
@@ -144,16 +137,15 @@ public class MethodHandlingTimeoutTest {
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
 
-        Thread.sleep(1000);
+        await("Counsumer should start processing").atMost(1, TimeUnit.SECONDS).until(consumer::isRunning);
         CompletableFuture<Map> response = producer.syncCallMethod(METHOD_1.withTimeout(500), singletonMap("aa", 11));
-
-        executor.awaitTermination(1, TimeUnit.SECONDS);
 
         response.get(3, TimeUnit.SECONDS);
 
         producer.stop();
         consumer.stop();
         executor.shutdown();
+        await("Executor should terminate").atMost(3, TimeUnit.SECONDS).until(executor::isTerminated);
 
         assertEquals(singletonMap("a", 1), response.get());
     }

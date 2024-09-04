@@ -1,14 +1,13 @@
 package hu.dbx.kompot.ng.methods;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
 import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Map;
@@ -23,16 +22,13 @@ import static org.junit.Assert.fail;
  * A tuloldalon kivetel kepzodott.
  */
 @SuppressWarnings("unchecked")
-public class MethodHandlingRemoteExceptionTest {
+public class MethodHandlingRemoteExceptionTest extends AbstractRedisTest {
 
     private static final MethodDescriptor METHOD_1 = MethodDescriptor.ofName("GROUP1", "method1");
     private static final ConsumerIdentity consumerIdentity = groupGroup("GROUP1");
     private static final ConsumerIdentity producerIdentity = groupGroup("GROUP2");
 
     private static String EXCEPTION_MSG = "Now, I am become Death, the destroyer of worlds";
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     @Test
     public void testHaHibaTortenikAkkorMegkapom() throws InterruptedException, SerializationException {

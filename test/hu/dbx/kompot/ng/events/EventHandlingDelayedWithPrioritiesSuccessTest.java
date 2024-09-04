@@ -1,14 +1,13 @@
 package hu.dbx.kompot.ng.events;
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.handler.SelfDescribingEventProcessor;
 import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.exceptions.SerializationException;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.net.URI;
@@ -20,23 +19,20 @@ import java.util.concurrent.TimeUnit;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
 import static java.util.Collections.singletonMap;
-import static org.junit.Assert.assertArrayEquals;
+import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
 
 /**
  * Elinditunk ket esemenyt. A szerver csak kesobb indul el es a magasabb prioritasuval kezdi a feldolgozast.
  */
 @SuppressWarnings("unchecked")
-public class EventHandlingDelayedWithPrioritiesSuccessTest {
+public class EventHandlingDelayedWithPrioritiesSuccessTest extends AbstractRedisTest {
 
     private static final EventDescriptor EVENT_1 = EventDescriptor.of("EVENT1D", Map.class, Priority.LOW);
     private static final EventDescriptor EVENT_2 = EventDescriptor.of("EVENT2", Map.class, Priority.HIGH);
 
     private static final ConsumerIdentity consumerIdentity = groupGroup("EVENT1D");
     private static final ConsumerIdentity producerIdentity = groupGroup("XXX");
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
 
     @Test
     public void testSendManyEventsAndProcessInOrder() throws InterruptedException, SerializationException {
@@ -51,14 +47,10 @@ public class EventHandlingDelayedWithPrioritiesSuccessTest {
             producer.asyncSendEvent(EVENT_2, singletonMap("bb", 11));
         }
 
-        executor.awaitTermination(3, TimeUnit.SECONDS);
-
         final ConcurrentLinkedQueue<Integer> counter = new ConcurrentLinkedQueue();
         CommunicationEndpoint consumer = startConsumer(counter, executor);
 
-        executor.awaitTermination(3, TimeUnit.SECONDS);
-
-        assertEquals(20, counter.size());
+        await("Consumers should process all events").atMost(5, TimeUnit.SECONDS).until(() -> counter.size() == 20);
 
         // itt nem lehet elvarni, hogy pont sorban fognak megerkezni. de az elso-utolso stimmeljen!
         assertEquals(2, counter.toArray()[0]);
@@ -66,6 +58,8 @@ public class EventHandlingDelayedWithPrioritiesSuccessTest {
 
         producer.stop();
         consumer.stop();
+        executor.shutdown();
+        await("Executor should terminate").atMost(5, TimeUnit.SECONDS).until(executor::isTerminated);
     }
 
     private CommunicationEndpoint startConsumer(ConcurrentLinkedQueue<Integer> counter, ExecutorService executor) {

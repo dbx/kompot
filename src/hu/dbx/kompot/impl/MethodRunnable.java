@@ -4,7 +4,6 @@ import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.core.SerializeHelper;
-import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import org.slf4j.Logger;
@@ -48,11 +47,14 @@ final class MethodRunnable implements Runnable {
                 // some other instance has already took this item, we do nothing
             } else {
 
+                //noinspection rawtypes
                 MethodRequestFrame mrf = null;
 
                 // itt egy masik try-catch van, mert csak akkor irhatom vissza, hogy nem sikerult, ha mar enyem az ownership.
                 try {
-                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(), consumerHandlers.getMethodDescriptorResolver(), methodUuid);
+                    //noinspection rawtypes
+                    final Optional<MethodRequestFrame> frameOp = DataHandling.readMethodFrame(store, consumer.getKeyNaming(),
+                            consumerHandlers.getMethodDescriptorResolver(), methodUuid, consumerConfig.getLogSensitiveDataKeys());
 
                     if (frameOp.isPresent()) {
                         mrf = frameOp.get();
@@ -79,8 +81,9 @@ final class MethodRunnable implements Runnable {
         }
     }
 
-    private void process(Jedis store, MethodRequestFrame mrf) throws SerializationException {
+    private void process(Jedis store, @SuppressWarnings("rawtypes") MethodRequestFrame mrf) {
 
+        //noinspection rawtypes
         final MethodDescriptor methodMarker = mrf.getMethodMarker();
 
         store.zrem(consumer.getKeyNaming().unprocessedEventsByGroupKey(methodMarker.getMethodGroupName()), mrf.getIdentifier().toString());
@@ -120,12 +123,12 @@ final class MethodRunnable implements Runnable {
     /**
      * On case of failures we run callbacks and write failure code.
      */
-    private void callFailureListeners(MethodRequestFrame mrf, Throwable t) {
+    private void callFailureListeners(@SuppressWarnings("rawtypes") MethodRequestFrame mrf, Throwable t) {
         methodEventListeners.forEach(x -> {
             try {
                 x.onRequestProcessingFailure(mrf, t);
             } catch (Throwable e) {
-                LOGGER.error("Error when running method failure event listener for {} on {}", e);
+                LOGGER.error("Error when running method failure event listener for {} on {}",x, methodUuid, e);
             }
         });
     }
@@ -138,9 +141,6 @@ final class MethodRunnable implements Runnable {
             LOGGER.error("Redis got disconnected. exiting.");
         } else if (store.getClient().isBroken()) {
             LOGGER.error("Client got broken. exiting.");
-        } else if (store.getClient().isInMulti()) {
-            // this is an illegal state. we should not send a notification because it makes no sense.
-            LOGGER.error("A Jedis Multi has been interrupted! exiting.");
         } else {
             final String methodKey = consumer.getKeyNaming().methodDetailsKey(methodUuid);
 
@@ -149,7 +149,7 @@ final class MethodRunnable implements Runnable {
 
             final String responseNotificationChannel = "id:" + senderUuid;
 
-            LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid.toString());
+            LOGGER.debug("Notifying response on {} with {}", responseNotificationChannel, methodUuid);
 
             store.publish(responseNotificationChannel, methodUuid.toString());
         }

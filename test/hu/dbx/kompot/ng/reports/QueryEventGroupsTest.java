@@ -2,50 +2,30 @@ package hu.dbx.kompot.ng.reports;
 
 
 import hu.dbx.kompot.CommunicationEndpoint;
-import hu.dbx.kompot.TestRedis;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.DefaultKeyNaming;
-import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.Reporting;
-import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.slf4j.Logger;
-import redis.clients.jedis.Jedis;
 
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static hu.dbx.kompot.impl.DefaultConsumerIdentity.groupGroup;
-import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class QueryEventGroups {
+public class QueryEventGroupsTest extends AbstractRedisTest {
 
-    private static final Logger LOGGER = LoggerUtils.getLogger();
-
-    private static final EventDescriptor<Map> EVENT_1 = EventDescriptor.of("EVENT1", Map.class);
-    private static final EventDescriptor<Map> EVENT_2 = EventDescriptor.of("EVENT2", Map.class);
+    private static final EventDescriptor<String> EVENT_1 = EventDescriptor.of("EVENT1", String.class);
+    private static final EventDescriptor<String> EVENT_2 = EventDescriptor.of("EVENT2", String.class);
     private static final ConsumerIdentity producerIdentity = groupGroup("PROD");
-
-
-    @Rule
-    public TestRedis redis = TestRedis.build();
-
-    @Before
-    public void before() {
-        try (Jedis jedis = redis.getJedisPool().getResource()) {
-            jedis.flushDB();
-        }
-    }
 
     @Test
     public void queryEventGroups() throws SerializationException {
@@ -55,11 +35,11 @@ public class QueryEventGroups {
 
         final CommunicationEndpoint producer = CommunicationEndpoint.ofRedisConnectionUri(redis.getConnectionURI(), EventGroupProvider.identity(), producerIdentity, executor);
         producer.start();
-        producer.asyncSendEvent(EVENT_1, singletonMap("aa", 0));
+        producer.asyncSendEvent(EVENT_1, "aa");
 
         assertEquals(1, reporting.listAllEventGroups().size());
 
-        producer.asyncSendEvent(EVENT_2, singletonMap("bb", 1));
+        producer.asyncSendEvent(EVENT_2, "bb");
 
         producer.stop();
 

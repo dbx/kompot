@@ -8,7 +8,14 @@ package hu.dbx.kompot.events;
 public enum Priority {
 
 
-    HIGH(2), LOW(1);
+    HIGH(7),
+    LOW(6),
+    BATCH(5),
+    BATCH100(4),
+    BATCH1000(3),
+    BATCH10000(2),
+    BATCH100000(1)
+    ;
 
     /**
      * High priotity evts have higher score.

@@ -6,7 +6,11 @@ import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DataHandling.Statuses;
 import hu.dbx.kompot.impl.LoggerUtils;
 import org.slf4j.Logger;
-import redis.clients.jedis.*;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.Transaction;
+import redis.clients.jedis.params.ScanParams;
+import redis.clients.jedis.resps.ScanResult;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -195,7 +199,7 @@ public final class Reporting implements EventQueries, EventUpdates {
     }
 
 
-    private final static List<Statuses> resendableStatuses = Arrays.asList(Statuses.ERROR, Statuses.PROCESSING);
+    private static final List<Statuses> resendableStatuses = Arrays.asList(Statuses.ERROR, Statuses.PROCESSING);
 
     @Override
     public void resendEvent(UUID eventUuid, String eventGroup) {

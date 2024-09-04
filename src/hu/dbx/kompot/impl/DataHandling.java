@@ -163,12 +163,12 @@ public final class DataHandling {
         }
     }
 
+    private static final long PRIORITY_LEVEL_WEIGHT_OFFSET = 1L << 35; //kb 400 nap (millisecben)
+
     public static void zaddNow(Transaction tx, String sortedSetKey, Priority priority, byte[] value) {
-        long start = 1532092223L; // 2018 july
         long now = System.currentTimeMillis();
 
-        // TODO: test different weight functions!
-        double weight = ((double) start - now) - start * priority.score;
+        double weight = now - priority.score * PRIORITY_LEVEL_WEIGHT_OFFSET;
         tx.zadd(sortedSetKey.getBytes(), weight, value);
     }
 
@@ -179,13 +179,18 @@ public final class DataHandling {
      * @param keyNaming     used to get keys used in this redis instance.
      * @param eventResolver used to find event descriptor
      * @param eventUuid     event identifier
+     * @param logSensitiveDataKeys
      * @return read frame - not null
      * @throws DeserializationException on deserialization error
      * @throws IllegalStateException    when no event descriptor is found for evt type
      * @throws IllegalArgumentException could not find event data in redis
      */
     @SuppressWarnings("unchecked")
-    static EventFrame readEventFrame(Jedis jedis, KeyNaming keyNaming, EventDescriptorResolver eventResolver, UUID eventUuid) throws DeserializationException {
+    static EventFrame readEventFrame(Jedis jedis,
+                                     KeyNaming keyNaming,
+                                     EventDescriptorResolver eventResolver,
+                                     UUID eventUuid,
+                                     List<String> logSensitiveDataKeys) throws DeserializationException {
         final String eventDetailsKey = keyNaming.eventDetailsKey(eventUuid);
 
         LOGGER.debug("Loading event details under key {}", eventDetailsKey);
@@ -205,7 +210,7 @@ public final class DataHandling {
         if (eventData != null) {
             eventDataObj = SerializeHelper.deserializeContentOnly(eventName, eventData, eventResolver);
         } else {
-            eventDataObj = decompressEventData(eventResolver, eventName, eventDataZip);
+            eventDataObj = decompressEventData(eventResolver, eventName, eventDataZip, logSensitiveDataKeys);
         }
 
         final Optional<EventDescriptor> eventMarker = eventResolver.resolveMarker(eventName);
@@ -226,10 +231,10 @@ public final class DataHandling {
         }
     }
 
-    private static Object decompressEventData(EventDescriptorResolver eventResolver, String eventName, byte[] eventDataZip) throws DeserializationException {
+    private static Object decompressEventData(EventDescriptorResolver eventResolver, String eventName, byte[] eventDataZip, List<String> logSensitiveDataKeys) throws DeserializationException {
         Object eventDataObj;
         try (ByteArrayInputStream input = new ByteArrayInputStream(eventDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
-            eventDataObj = SerializeHelper.deserializeContentOnly(eventName, logEntityStream(iz), eventResolver);
+            eventDataObj = SerializeHelper.deserializeContentOnly(eventName, logEntityStream(iz, logSensitiveDataKeys), eventResolver);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -258,7 +263,11 @@ public final class DataHandling {
 
 
     @SuppressWarnings("unchecked")
-    static Optional<MethodRequestFrame> readMethodFrame(Jedis jedis, KeyNaming keyNaming, MethodDescriptorResolver resolver, UUID methodUuid) throws DeserializationException {
+    static Optional<MethodRequestFrame> readMethodFrame(Jedis jedis,
+                                                        KeyNaming keyNaming,
+                                                        MethodDescriptorResolver resolver,
+                                                        UUID methodUuid,
+                                                        List<String> logSensitiveDataKeys) throws DeserializationException {
         final String methodDetailsKey = keyNaming.methodDetailsKey(methodUuid);
         final String methodName = jedis.hget(methodDetailsKey, CODE.name());
         if (methodName == null) {
@@ -281,7 +290,7 @@ public final class DataHandling {
         if (methodData != null) {
             requestData = SerializeHelper.deserializeRequest(methodName, methodData, resolver);
         } else {
-            requestData = decompressMethodData(resolver, methodName, methodDataZip);
+            requestData = decompressMethodData(resolver, methodName, methodDataZip, logSensitiveDataKeys);
         }
 
         final MetaDataHolder methodMeta = readMetaData(jedis, methodDetailsKey);
@@ -296,10 +305,10 @@ public final class DataHandling {
         return Optional.of(frame);
     }
 
-    private static Object decompressMethodData(MethodDescriptorResolver resolver, String methodName, byte[] methodDataZip) throws DeserializationException {
+    private static Object decompressMethodData(MethodDescriptorResolver resolver, String methodName, byte[] methodDataZip, List<String> logSensitiveDataKeys) throws DeserializationException {
         Object requestData;
         try (ByteArrayInputStream input = new ByteArrayInputStream(methodDataZip); GZIPInputStream iz = new GZIPInputStream(input)) {
-            requestData = SerializeHelper.deserializeRequest(methodName, logEntityStream(iz), resolver);
+            requestData = SerializeHelper.deserializeRequest(methodName, logEntityStream(iz, logSensitiveDataKeys), resolver);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -347,7 +356,7 @@ public final class DataHandling {
         return meta;
     }
 
-    private static InputStream logEntityStream(InputStream stream) throws IOException {
+    private static InputStream logEntityStream(InputStream stream, List<String> logSensitiveDataKeys) throws IOException {
         final StringBuilder builder = new StringBuilder();
 
         builder.append("DataEntity:\n");
@@ -367,15 +376,14 @@ public final class DataHandling {
         }
         stream.reset();
 
-        final String s = filterSensitiveDataOutFromMessage(builder.toString());
+        final String s = filterSensitiveDataOutFromMessage(builder.toString(), logSensitiveDataKeys);
         LOGGER.info(s);
 
         return stream;
     }
 
-    public static String filterSensitiveDataOutFromMessage(String message) {
-        final List<String> sensitiveDataKeysToFilterBy = Arrays.asList("password", "cardId");
-        for (String key : sensitiveDataKeysToFilterBy) {
+    public static String filterSensitiveDataOutFromMessage(String message, List<String> logSensitiveDataKeys) {
+        for (String key : logSensitiveDataKeys) {
             message = filterByKeyword(key, message);
         }
 

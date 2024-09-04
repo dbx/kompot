@@ -38,6 +38,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import static java.util.Collections.emptyList;
+
 /**
  * Use this component as a simplified interface to access library functionality.
  */
@@ -45,6 +47,8 @@ import java.util.concurrent.ScheduledExecutorService;
 public final class CommunicationEndpoint {
 
     public static final int DEFAULT_EXECUTOR_THREADS = 12;
+    public static final List<String> DEFAULT_LOG_SENSITIVE_DATA_KEYS = emptyList();
+    public static final int DEFAULT_MAX_EVENT_THREAD_COUNT = 3;
 
     private final DefaultEventProcessorAdapter events = new DefaultEventProcessorAdapter();
     private final DefaultMethodProcessorAdapter methods = new DefaultMethodProcessorAdapter();
@@ -66,7 +70,16 @@ public final class CommunicationEndpoint {
     public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
                                                              EventGroupProvider groups,
                                                              ConsumerIdentity serverIdentity) {
-        return ofRedisConnectionUri(connection, groups, serverIdentity, Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS));
+        return ofRedisConnectionUri(connection, groups, serverIdentity,
+                Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS));
+    }
+
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             int maxEventThreadCount) {
+        return ofRedisConnectionUri(connection, groups, serverIdentity,
+                Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS), DEFAULT_LOG_SENSITIVE_DATA_KEYS, maxEventThreadCount);
     }
 
     @Deprecated
@@ -74,7 +87,8 @@ public final class CommunicationEndpoint {
                                                              EventGroupProvider groups,
                                                              ConsumerIdentity serverIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(), executor);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                executor, DEFAULT_LOG_SENSITIVE_DATA_KEYS, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
     /**
@@ -85,20 +99,47 @@ public final class CommunicationEndpoint {
                                                              ConsumerIdentity serverIdentity,
                                                              ProducerIdentity producerIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(new JedisPool(connection), groups, serverIdentity, producerIdentity, executor);
+        return new CommunicationEndpoint(connection, groups, serverIdentity, producerIdentity, executor,
+                DEFAULT_LOG_SENSITIVE_DATA_KEYS, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
-    private CommunicationEndpoint(JedisPool pool,
+    /**
+     * Constructs a new instance with a custom executor serviece and log sensitive data keys
+     */
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             ExecutorService executor,
+                                                             List<String> logSensitiveDataKeys) {
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                executor, logSensitiveDataKeys, DEFAULT_MAX_EVENT_THREAD_COUNT);
+    }
+
+    public static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                             EventGroupProvider groups,
+                                                             ConsumerIdentity serverIdentity,
+                                                             ExecutorService executor,
+                                                             List<String> logSensitiveDataKeys,
+                                                             int maxEventThreadCount) {
+        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                executor, logSensitiveDataKeys, maxEventThreadCount);
+    }
+
+    private CommunicationEndpoint(URI connection,
                                   EventGroupProvider groups,
                                   ConsumerIdentity serverIdentity,
                                   ProducerIdentity producerIdentity,
-                                  ExecutorService executor) {
+                                  ExecutorService executor,
+                                  List<String> logSensitiveDataKeys,
+                                  int maxEventThreadCount) {
 
         final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
-        final ConsumerConfig consumerConfig = new ConsumerConfig(executor, scheduledExecutor, serverIdentity, pool, naming);
+        final ConsumerConfig consumerConfig =
+                new ConsumerConfig(executor, scheduledExecutor, serverIdentity, new JedisPool(connection), naming, logSensitiveDataKeys, maxEventThreadCount);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
-        final ProducerConfig producerConfig = new ProducerConfig(executor, scheduledExecutor, pool, naming, producerIdentity);
+        final ProducerConfig producerConfig =
+                new ProducerConfig(executor, scheduledExecutor, new JedisPool(connection), naming, producerIdentity);
 
         this.consumer = new ConsumerImpl(consumerConfig, handlers);
         this.producer = new ProducerImpl(producerConfig, groups, this.consumer);
@@ -189,6 +230,7 @@ public final class CommunicationEndpoint {
      * @param eventListener not null callback object
      * @throws IllegalArgumentException on null parameter
      */
+    @SuppressWarnings("unused")
     public void registerMethodReceivingCallback(MethodReceivingCallback eventListener) throws IllegalArgumentException {
         lifecycle.doBeforeStarted(() -> consumer.addMethodReceivingCallback(eventListener));
     }
@@ -220,22 +262,23 @@ public final class CommunicationEndpoint {
      *
      * @param factory not null.
      */
+    @SuppressWarnings("unused")
     public void registerEventHandlers(EventProcessorFactory factory) {
         lifecycle.doBeforeStarted(() -> events.register(factory));
     }
 
-    public void registerEventHandler(SelfDescribingEventProcessor adapter) {
+    public void registerEventHandler(@SuppressWarnings("rawtypes") SelfDescribingEventProcessor adapter) {
         lifecycle.doBeforeStarted(() -> events.register(adapter));
     }
 
-    public void registerMethodProcessor(SelfDescribingMethodProcessor methodProcessor) {
+    public void registerMethodProcessor(@SuppressWarnings("rawtypes") SelfDescribingMethodProcessor methodProcessor) {
         lifecycle.doBeforeStarted(() -> methods.register(methodProcessor));
     }
 
     /**
      * Felregisztral egy esemenykezelot arra az esetre, ha broadcast uzenetet kapunk
      */
-    public void registerBroadcastProcessor(SelfDescribingBroadcastProcessor broadcastProcessor) {
+    public void registerBroadcastProcessor(@SuppressWarnings("rawtypes") SelfDescribingBroadcastProcessor broadcastProcessor) {
         lifecycle.doBeforeStarted(() -> broadcasts.register(broadcastProcessor));
     }
 

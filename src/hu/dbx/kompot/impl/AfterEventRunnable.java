@@ -8,7 +8,6 @@ import redis.clients.jedis.Jedis;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -53,16 +52,14 @@ final class AfterEventRunnable implements ConsumerImpl.Trampoline {
         final String dbKey = consumer.getKeyNaming().unprocessedEventsByGroupKey(groupCode);
 
         try (final Jedis store = consumerConfig.getPool().getResource()) {
-            final Set<String> elems = store.zrangeByScore(dbKey, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, 1);
-
-            if (elems != null && !elems.isEmpty()) {
-                return Optional.of(UUID.fromString(elems.iterator().next()));
-            } else {
-                return Optional.empty();
-            }
+            return Optional.of(store)
+                    //TODO: Redis 6.2-től ZRANGEBYSCORE deprecated, helyette ZRANGE használható
+                    .map(s -> s.zrangeByScore(dbKey, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, 0, 1))
+                    .flatMap(e -> e.stream().findFirst())
+                    .map(UUID::fromString);
         } catch (Throwable t) {
             LOGGER.error("Error on finding next event!", t);
-            throw t;
+            return Optional.empty();
         }
     }
 }
