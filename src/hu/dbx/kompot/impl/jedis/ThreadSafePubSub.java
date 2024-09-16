@@ -1,5 +1,7 @@
-package hu.dbx.kompot.core;
+package hu.dbx.kompot.impl.jedis;
 
+import hu.dbx.kompot.consumer.ConsumerIdentity;
+import hu.dbx.kompot.consumer.Listener;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPubSub;
@@ -33,28 +35,27 @@ public final class ThreadSafePubSub implements Runnable {
         this.listener = listener;
     }
 
+
     private final JedisPubSub pubSub = new JedisPubSub() {
 
         @Override
         public void onSubscribe(String channel, int subscribedChannels) {
             if (subscribedChannels == expectedChannels.get()) {
                 startLatch.countDown();
+                listener.afterStarted();
             }
 
             subscribed.add(channel);
-
-            listener.onSubscribe(channel, subscribedChannels);
         }
 
         @Override
         public void onUnsubscribe(String channel, int subscribedChannels) {
             if (subscribedChannels == 0) {
                 stopLatch.countDown();
+                listener.afterStopped();
             }
 
             subscribed.remove(channel);
-
-            listener.onUnsubscribe(channel, subscribedChannels);
         }
 
         @Override
@@ -70,13 +71,34 @@ public final class ThreadSafePubSub implements Runnable {
     /**
      * Starts this component by subscribint to the given set of channels.
      */
-    public synchronized void startWithChannels(String... channels) throws InterruptedException {
+    public synchronized void startWithChannels(ConsumerIdentity consumerIdentity, Set<String> supportedBroadcastCodes) throws InterruptedException {
 
-        subscribed.addAll(Arrays.asList(channels));
+        subscribed.addAll(Arrays.asList(getPubSubChannels(consumerIdentity, supportedBroadcastCodes)));
 
         daemonThread.start();
 
         startLatch.await();
+    }
+
+    /**
+     * Osszeszedi az osszes figyelt csatornat.
+     */
+    private String[] getPubSubChannels(ConsumerIdentity consumerIdentity, Set<String> supportedBroadcastCodes) {
+        List<String> channels = new LinkedList<>();
+
+        // nekem cimzett esemenyek
+        channels.add("e:" + consumerIdentity.getEventGroup());
+
+        // nekem cimzett metodusok
+        channels.add("m:" + consumerIdentity.getMessageGroup());
+
+        // tamogatott broadcast uzenet tipusok
+        supportedBroadcastCodes.forEach(broadcastCode -> channels.add("b:" + broadcastCode));
+
+        // szemelyesen nekem cimzett visszajelzesek
+        channels.add("id:" + consumerIdentity.getIdentifier());
+
+        return channels.toArray(new String[]{});
     }
 
     @Override
@@ -103,13 +125,4 @@ public final class ThreadSafePubSub implements Runnable {
         stopLatch.await();
     }
 
-    public interface Listener {
-        void onMessage(String channel, String message);
-
-        void onSubscribe(String channel, int subscribedChannels);
-
-        void onUnsubscribe(String channel, int subscribedChannels);
-    }
 }
-
-

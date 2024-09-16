@@ -1,8 +1,7 @@
 package hu.dbx.kompot.impl.producer;
 
-import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.core.MessagingService;
 import hu.dbx.kompot.producer.ProducerIdentity;
-import redis.clients.jedis.JedisPool;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -14,15 +13,13 @@ public final class ProducerConfig {
 
     private final Executor executor;
     private final ScheduledExecutorService scheduledExecutor;
-    private final JedisPool pool;
-    private final KeyNaming naming;
+    private final MessagingService messagingService;
     private final ProducerIdentity producerIdentity;
 
-    public ProducerConfig(Executor executor, ScheduledExecutorService scheduledExecutor, JedisPool jedisPool, KeyNaming keyNaming, ProducerIdentity producerIdentity) {
+    public ProducerConfig(Executor executor, ScheduledExecutorService scheduledExecutor, MessagingService messagingService, ProducerIdentity producerIdentity) {
         this.executor = executor;
         this.scheduledExecutor = scheduledExecutor;
-        this.pool = jedisPool;
-        this.naming = keyNaming;
+        this.messagingService = messagingService;
         this.producerIdentity = producerIdentity;
     }
 
@@ -30,12 +27,8 @@ public final class ProducerConfig {
         return executor;
     }
 
-    public JedisPool getPool() {
-        return pool;
-    }
-
-    public KeyNaming getNaming() {
-        return naming;
+    public MessagingService getMessagingService() {
+        return messagingService;
     }
 
     public ScheduledExecutorService getScheduledExecutor() {

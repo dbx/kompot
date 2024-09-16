@@ -1,4 +1,4 @@
-package hu.dbx.kompot.core;
+package hu.dbx.kompot.impl.jedis;
 
 import java.util.UUID;
 

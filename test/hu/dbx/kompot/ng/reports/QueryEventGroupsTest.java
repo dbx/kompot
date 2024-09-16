@@ -5,7 +5,7 @@ import hu.dbx.kompot.CommunicationEndpoint;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.exceptions.SerializationException;
-import hu.dbx.kompot.impl.DefaultKeyNaming;
+import hu.dbx.kompot.impl.jedis.DefaultKeyNaming;
 import hu.dbx.kompot.ng.AbstractRedisTest;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.report.Reporting;

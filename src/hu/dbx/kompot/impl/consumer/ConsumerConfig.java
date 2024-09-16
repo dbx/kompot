@@ -1,8 +1,7 @@
 package hu.dbx.kompot.impl.consumer;
 
 import hu.dbx.kompot.consumer.ConsumerIdentity;
-import hu.dbx.kompot.core.KeyNaming;
-import redis.clients.jedis.JedisPool;
+import hu.dbx.kompot.core.MessagingService;
 
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -16,23 +15,20 @@ public final class ConsumerConfig {
     private final Executor executor;
     private final ScheduledExecutorService scheduledExecutor;
     private final ConsumerIdentity identity;
-    private final JedisPool pool;
-    private final KeyNaming naming;
+    private final MessagingService messagingService;
     private final List<String> logSensitiveDataKeys;
     private final int maxEventThreadCount;
 
     public ConsumerConfig(Executor executor,
                           ScheduledExecutorService scheduledExecutor,
                           ConsumerIdentity consumerIdentity,
-                          JedisPool jedisPool,
-                          KeyNaming keyNaming,
+                          MessagingService messagingService,
                           List<String> logSensitiveDataKeys,
                           int maxEventThreadCount) {
         this.executor = executor;
         this.scheduledExecutor = scheduledExecutor;
         this.identity = consumerIdentity;
-        this.pool = jedisPool;
-        this.naming = keyNaming;
+        this.messagingService = messagingService;
         this.logSensitiveDataKeys = logSensitiveDataKeys;
         this.maxEventThreadCount = maxEventThreadCount;
     }
@@ -45,12 +41,8 @@ public final class ConsumerConfig {
         return identity;
     }
 
-    public JedisPool getPool() {
-        return pool;
-    }
-
-    public KeyNaming getNaming() {
-        return naming;
+    public MessagingService getMessagingService() {
+        return messagingService;
     }
 
     public ScheduledExecutorService getScheduledExecutor() {

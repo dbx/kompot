@@ -10,10 +10,8 @@ import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptorResolver;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptorResolver;
 import hu.dbx.kompot.exceptions.DeserializationException;
-import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.status.StatusReport;
-import redis.clients.jedis.Jedis;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -23,9 +21,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPOutputStream;
-
-import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.EXCEPTION_CLASS;
-import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.EXCEPTION_MESSAGE;
 
 /**
  * Serialization strategy for EventFrame entities.
@@ -186,20 +181,12 @@ public final class SerializeHelper {
         }
     }
 
-    public static byte[] serializeObjectToBytes(Object object) throws SerializationException {
+    public static byte[] serializeObjectToBytes(Object object) {
         try {
             return getObjectMapper().writeValueAsBytes(object);
         } catch (JsonProcessingException e) {
-            throw new SerializationException(object, "Could not serialize any data", e);
+            throw new RuntimeException(e);
         }
-    }
-
-
-    public static MessageErrorResultException deserializeException(String methodDetailsKey, Jedis connection) {
-        final String className = connection.hget(methodDetailsKey, EXCEPTION_CLASS.name());
-        final String message = connection.hget(methodDetailsKey, EXCEPTION_MESSAGE.name());
-
-        return new MessageErrorResultException(message, className);
     }
 
     public static byte[] compressData(Object eventData) {
