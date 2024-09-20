@@ -150,7 +150,7 @@ public final class CommunicationEndpoint {
                                                               int maxEventThreadCount) throws IOException, TimeoutException, URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
         final ConnectionFactory factory = createRabbitConnectionFactory(connection);
         final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(factory.newConnection(), serverIdentity),
-                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
                 Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS), DEFAULT_LOG_SENSITIVE_DATA_KEYS, maxEventThreadCount);
         communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
         return communicationEndpoint;
@@ -164,7 +164,7 @@ public final class CommunicationEndpoint {
                                                               int maxEventThreadCount) throws IOException, TimeoutException, URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
         final ConnectionFactory factory = createRabbitConnectionFactory(connection);
         final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(factory.newConnection(), serverIdentity),
-                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
                 executor, logSensitiveDataKeys, maxEventThreadCount);
         communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
         return communicationEndpoint;
