@@ -1,11 +1,12 @@
-package hu.dbx.kompot.impl;
+package hu.dbx.kompot.impl.jedis;
 
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventFrame;
 import hu.dbx.kompot.consumer.async.EventReceivingCallback;
-import hu.dbx.kompot.consumer.async.EventStatusCallback;
-import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.events.Priority;
+import hu.dbx.kompot.impl.DataHandling;
+import hu.dbx.kompot.impl.DefaultEventStatusCallback;
+import hu.dbx.kompot.impl.LoggerUtils;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -13,89 +14,51 @@ import redis.clients.jedis.Transaction;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.PRIORITY;
-import static hu.dbx.kompot.impl.LoggerUtils.debugEventFrame;
 
 /**
  * Default error handling strategy.
  * Maintains statuses in redis keys ands calls event receiving callbacks.
  */
-final class DefaultCallback implements EventStatusCallback {
+final class JedisEventStatusCallback extends DefaultEventStatusCallback {
+
     private final UUID eventId;
     private final JedisPool pool;
-    private final AtomicBoolean hasBeenCalled = new AtomicBoolean(false);
     private final KeyNaming keyNaming;
     private final ConsumerIdentity consumerIdentity;
-
     private final AtomicReference<EventFrame> frame = new AtomicReference<>();
-    private final List<EventReceivingCallback> eventReceivingCallbacks;
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     // TODO: nem jo h redis peldanayt kap, mert thread-safe-nek kellene lennie!
-    DefaultCallback(JedisPool pool, UUID eventId, KeyNaming keyNaming, ConsumerIdentity consumerIdentity, List<EventReceivingCallback> eventReceivingCallbacks) {
+    JedisEventStatusCallback(JedisPool pool, UUID eventId, KeyNaming keyNaming, ConsumerIdentity consumerIdentity, List<EventReceivingCallback> eventReceivingCallbacks) {
+        super(eventId, eventReceivingCallbacks);
         this.pool = pool;
         this.eventId = eventId;
         this.keyNaming = keyNaming;
         this.consumerIdentity = consumerIdentity;
-        this.eventReceivingCallbacks = eventReceivingCallbacks;
     }
 
     /**
      * Marks event as being in processing state.
      */
-    void markProcessing() {
+    @Override
+    public void markProcessing() {
         writeStatus(DataHandling.Statuses.PROCESSING);
-    }
-
-    void setFrame(EventFrame frame) {
-        assert frame != null;
-        this.frame.set(frame);
     }
 
     @Override
     public void success(String message) {
-        if (hasBeenCalled.getAndSet(true))
-            throw new IllegalStateException("Callback has been called once!");
-
+        super.success(message);
         writeStatus(DataHandling.Statuses.PROCESSED);
-
-        // success callbacks
-        for (EventReceivingCallback eventReceivingCallback : eventReceivingCallbacks) {
-            try {
-                eventReceivingCallback.onEventProcessedSuccessfully(frame.get(), message);
-            } catch (Throwable t) {
-                debugEventFrame(LOGGER, frame.get());
-                LOGGER.error("Error executing callback on event uuid=" + eventId, t);
-            }
-        }
-    }
-
-    @Override
-    public void error(String e) {
-        error(new RuntimeException(e));
     }
 
     @Override
     public void error(Throwable e) {
-        if (hasBeenCalled.getAndSet(true))
-            throw new IllegalStateException("Callback has been called once!");
-
+        super.error(e);
         writeStatus(DataHandling.Statuses.ERROR);
-
-        // failure callbacks
-        for (EventReceivingCallback eventReceivingCallback : eventReceivingCallbacks) {
-            try {
-                eventReceivingCallback.onEventProcessingFailure(frame.get(), e);
-            } catch (Throwable t) {
-                debugEventFrame(LOGGER, frame.get());
-                LOGGER.error("Error executing callback on event uuid=" + eventId, t);
-            }
-        }
-
     }
 
     private void writeStatus(final DataHandling.Statuses status) {
@@ -120,14 +83,14 @@ final class DefaultCallback implements EventStatusCallback {
 
             if (status == DataHandling.Statuses.PROCESSING) {
                 multi.zrem(keyNaming.unprocessedEventsByGroupKey(groupName), eventId.toString());
-                DataHandling.zaddNow(multi, keyNaming.processingEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
+                JedisHelper.zaddNow(multi, keyNaming.processingEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
             } else if (status == DataHandling.Statuses.ERROR) {
                 multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
-                DataHandling.zaddNow(multi, keyNaming.failedEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
+                JedisHelper.zaddNow(multi, keyNaming.failedEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
             } else if (status == DataHandling.Statuses.PROCESSED) {
                 multi.zrem(keyNaming.processingEventsByGroupKey(groupName), eventId.toString());
-                DataHandling.zaddNow(multi, keyNaming.processedEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
-                DataHandling.decrementUnprocessedGroupsCounter(multi, keyNaming, eventId);
+                JedisHelper.zaddNow(multi, keyNaming.processedEventsByGroupKey(groupName), priority, eventId.toString().getBytes());
+                JedisHelper.decrementUnprocessedGroupsCounter(multi, keyNaming, eventId);
             }
 
             multi.exec();

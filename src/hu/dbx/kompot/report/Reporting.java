@@ -1,10 +1,11 @@
 package hu.dbx.kompot.report;
 
-import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.impl.jedis.KeyNaming;
 import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.DataHandling.Statuses;
 import hu.dbx.kompot.impl.LoggerUtils;
+import hu.dbx.kompot.impl.jedis.JedisHelper;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -236,7 +237,7 @@ public final class Reporting implements EventQueries, EventUpdates {
             //tranzakciót nyitok, törlöm a régi sorból, hozzáadom a CREATED sorhoz, update-elem a státuszát
             final Transaction tx = jedis.multi();
             tx.zrem(removeKey, eventUuid.toString());
-            DataHandling.zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(eventGroup), priority, eventUuid.toString().getBytes());
+            JedisHelper.zaddNow(tx, keyNaming.unprocessedEventsByGroupKey(eventGroup), priority, eventUuid.toString().getBytes());
             tx.hset(groupEventDataKey, STATUS.name(), Statuses.CREATED.name());
             tx.exec();
         }
@@ -278,7 +279,7 @@ public final class Reporting implements EventQueries, EventUpdates {
             multi.zrem(removeKey, eventUuid.toString());
             multi.del(groupEventDataKey);
 
-            DataHandling.decrementUnprocessedGroupsCounter(multi, keyNaming, eventUuid);
+            JedisHelper.decrementUnprocessedGroupsCounter(multi, keyNaming, eventUuid);
 
             multi.exec();
         }
@@ -299,7 +300,7 @@ public final class Reporting implements EventQueries, EventUpdates {
                             final String groupsStr = jedis.hget(eventDataKey, DataHandling.EventKeys.GROUPS.name());
                             final UUID uuid = parseUuidFromEventDataKey(eventDataKey);
 
-                            DataHandling.parseGroupsString(groupsStr).forEach(group -> {
+                            JedisHelper.parseGroupsString(groupsStr).forEach(group -> {
                                 final String groupListKey = keyNaming.processedEventsByGroupKey(group);
                                 jedis.zrem(groupListKey, uuid.toString());
 

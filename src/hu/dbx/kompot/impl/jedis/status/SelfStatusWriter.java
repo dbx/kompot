@@ -1,7 +1,8 @@
-package hu.dbx.kompot.status;
+package hu.dbx.kompot.impl.jedis.status;
 
-import hu.dbx.kompot.core.KeyNaming;
+import hu.dbx.kompot.impl.jedis.KeyNaming;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
+import hu.dbx.kompot.impl.jedis.JedisMessagingService;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.params.ScanParams;
@@ -33,7 +34,8 @@ public class SelfStatusWriter implements Runnable {
         final String key = heartbeatKey();
         final String time = new Date().toString();
 
-        try (final Jedis jedis = consumerConfig.getPool().getResource()) {
+        final JedisMessagingService messagingService = (JedisMessagingService) consumerConfig.getMessagingService();
+        try (final Jedis jedis = messagingService.getPool().getResource()) {
             final Transaction tr = jedis.multi();
             tr.persist(key); // remove timeout now
             tr.expire(key, (int) TIMEOUT_IN_SECS);
@@ -48,7 +50,8 @@ public class SelfStatusWriter implements Runnable {
     public static void delete(ConsumerConfig config) {
         final String key = new SelfStatusWriter(config).heartbeatKey();
 
-        try (final Jedis jedis = config.getPool().getResource()) {
+        final JedisMessagingService messagingService = (JedisMessagingService) config.getMessagingService();
+        try (final Jedis jedis = messagingService.getPool().getResource()) {
             jedis.del(key); // remove timeout now
         }
     }
@@ -56,7 +59,8 @@ public class SelfStatusWriter implements Runnable {
     private String heartbeatKey() {
         final String group = consumerConfig.getConsumerIdentity().getEventGroup();
         final String id = consumerConfig.getConsumerIdentity().getIdentifier();
-        return consumerConfig.getNaming().statusHolderKey(group, id);
+        final JedisMessagingService messagingService = (JedisMessagingService) consumerConfig.getMessagingService();
+        return messagingService.getKeyNaming().statusHolderKey(group, id);
     }
 
     /**

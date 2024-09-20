@@ -7,9 +7,7 @@ import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodDescriptor;
 import hu.dbx.kompot.consumer.sync.MethodRequestFrame;
 import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
-import hu.dbx.kompot.core.KeyNaming;
 import hu.dbx.kompot.core.SerializeHelper;
-import hu.dbx.kompot.events.Priority;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.exceptions.MessageErrorResultException;
 import hu.dbx.kompot.exceptions.SerializationException;
@@ -19,23 +17,17 @@ import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.Producer;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import org.slf4j.Logger;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.Transaction;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPInputStream;
 
-import static hu.dbx.kompot.core.SerializeHelper.deserializeException;
-import static hu.dbx.kompot.impl.DataHandling.EventKeys.STATUS;
-import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.RESPONSE;
-import static hu.dbx.kompot.impl.DataHandling.*;
+import static hu.dbx.kompot.impl.DataHandling.Statuses;
 import static hu.dbx.kompot.impl.DataHandling.Statuses.*;
 
 public final class ProducerImpl implements Producer {
@@ -67,7 +59,6 @@ public final class ProducerImpl implements Producer {
 
         final Iterable<String> eventGroups = getEventGroupProvider().findEventGroups(marker);
         final EventFrame<TReq> eventFrame = EventFrame.build(marker, request, metaData, eventGroups);
-        final Priority priority = marker.getPriority();
 
         eventSendingEventListeners.forEach(eventListener -> {
             try {
@@ -77,23 +68,8 @@ public final class ProducerImpl implements Producer {
             }
         });
 
-        try (Jedis jedis = producerConfig.getPool().getResource()) {
-            Transaction transaction = jedis.multi();
-            // save event data contents.
-            saveEventDetails(transaction, producerConfig.getNaming(), eventGroups, eventFrame, getProducerIdentity());
-
-            // register item in each group queue.
-            saveEventGroups(transaction, producerConfig.getNaming(), eventFrame.getIdentifier(), priority, eventGroups);
-
-            // publish on pubsub
-            LOGGER.trace("Publishing pubsub on {}", eventFrame.debugSignature());
-            eventGroups.forEach(group -> transaction.publish("e:" + group, eventFrame.getIdentifier().toString()));
-
-            transaction.exec();
-            LOGGER.trace("Called exec on {}", eventFrame.debugSignature());
-
-            LOGGER.info("Sent event {}", marker.getEventName());
-        }
+        producerConfig.getMessagingService().sendEvent(marker, eventFrame, producerConfig);
+        LOGGER.info("Sent event {}", marker.getEventName());
 
         eventSendingEventListeners.forEach(eventListener -> {
             try {
@@ -126,28 +102,14 @@ public final class ProducerImpl implements Producer {
 
         final CompletableFuture<TRes> responseFuture = new CompletableFuture<>();
 
-        try (final Jedis jedis = producerConfig.getPool().getResource()) {
-            final Transaction transaction = jedis.multi();
+        //  felregisztralunk a valasz objektumra
+        consumer.registerMessageFuture(requestFrame.getIdentifier(), message -> messageCallback(message, requestFrame, responseFuture));
 
-            // bementjuk a memoriaba
-            writeMethodFrame(transaction, producerConfig.getNaming(), requestFrame);
+        //timeout beállítása
+        scheduleMethodTimeout(requestFrame, responseFuture, marker.getTimeout());
 
-            // publikaljuk a metodust!
-            final String methodGroup = requestFrame.getMethodMarker().getMethodGroupName();
-
-            //  felregisztralunk a valasz objektumra
-            consumer.registerMessageFuture(requestFrame.getIdentifier(), () -> messageCallback(requestFrame, responseFuture));
-
-            //timeout beállítása
-            scheduleMethodTimeout(requestFrame, responseFuture, marker.getTimeout());
-
-            // megszolitjuk a cel modult
-            final String channel = "m:" + methodGroup;
-            transaction.publish(channel, requestFrame.getIdentifier().toString());
-            LOGGER.trace("Published on channel {}", channel);
-
-            transaction.exec();
-        }
+        producerConfig.getMessagingService().sendMessage(requestFrame, producerConfig);
+        LOGGER.info("Sent message {}", marker.getMethodName());
 
         methodEventListeners.forEach(methodEventListener -> {
             try {
@@ -179,16 +141,16 @@ public final class ProducerImpl implements Producer {
         }, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
-    private <TReq, TRes> void messageCallback(MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
+    private <TReq, TRes> void messageCallback(Object message, MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
         //noinspection EmptyFinallyBlock
-        try (final Jedis jedis = producerConfig.getPool().getResource()) {
-            Optional<Statuses> i = methodStatus(jedis, producerConfig.getNaming(), requestFrame.getIdentifier());
+        try {
+            Optional<Statuses> i = producerConfig.getMessagingService().getMethodStatus(message, producerConfig, requestFrame);
             if (!i.isPresent()) {
                 LOGGER.warn("Could not find status for message {}. Maybe already processed?", requestFrame.getIdentifier());
             } else if (ERROR.equals(i.get())) {
-                methodError(producerConfig.getNaming(), requestFrame, response, jedis);
+                methodError(message, requestFrame, response);
             } else if (PROCESSED.equals(i.get())) {
-                methodProcessed(producerConfig.getNaming(), requestFrame, response, jedis);
+                methodProcessed(message, requestFrame, response);
             } else if (PROCESSING.equals(i.get())) {// itt mar vissza kellett legyen irva az esemeny feldolgozottsaganak allapota
                 final String msg = "The method should not be in PROCESSING state! frame=" + requestFrame.debugSignature();
                 throw new IllegalStateException(msg);
@@ -201,29 +163,10 @@ public final class ProducerImpl implements Producer {
     }
 
     /**
-     * Visszaadja egy metodushivas statuszat uuid alapjan.
-     *
-     * @param jedis      jedis kapcsolat
-     * @param keyNaming  kulcs nevezesek
-     * @param methodUuid nem null metodus azonosito
-     * @return statusz objektum ami soha nem null
-     */
-    private Optional<Statuses> methodStatus(Jedis jedis, KeyNaming keyNaming, UUID methodUuid) {
-        final String methodDetailsKey = keyNaming.methodDetailsKey(methodUuid);
-        String statusString = jedis.hget(methodDetailsKey, STATUS.name());
-        if (statusString == null || statusString.isEmpty()) {
-            return Optional.empty();
-        } else {
-            return Optional.of(DataHandling.Statuses.valueOf(statusString));
-        }
-    }
-
-    /**
      * Kezel egy hibas statuszura allitott metodust
      */
-    private <TReq, TRes> void methodError(KeyNaming keyNaming, MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response, Jedis jds) {
-        final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
-        final MessageErrorResultException exception = deserializeException(methodDetailsKey, jds);
+    private <TReq, TRes> void methodError(Object message, MethodRequestFrame<TReq> requestFrame, CompletableFuture<TRes> response) {
+        final MessageErrorResultException exception = producerConfig.getMessagingService().getMethodError(message, producerConfig, requestFrame);
         response.completeExceptionally(exception);
 
         methodEventListeners.forEach(methodEventListener -> {
@@ -238,12 +181,10 @@ public final class ProducerImpl implements Producer {
     /**
      * Kezel egy feldolgozott statuszura allitott metodust
      */
-    private <TReq, TRes> void methodProcessed(KeyNaming keyNaming,
+    private <TReq, TRes> void methodProcessed(Object message,
                                               MethodRequestFrame<TReq> requestFrame,
-                                              CompletableFuture<TRes> response,
-                                              Jedis jedis) throws DeserializationException {
-        final String methodDetailsKey = keyNaming.methodDetailsKey(requestFrame.getIdentifier());
-        final byte[] data = jedis.hget(methodDetailsKey.getBytes(), RESPONSE.name().getBytes());
+                                              CompletableFuture<TRes> response) throws DeserializationException {
+        final byte[] data = producerConfig.getMessagingService().getMethodResponse(message, producerConfig, requestFrame);
 
         //noinspection unchecked
         final TRes res = (TRes) decompressMethodResponse(data, requestFrame.getMethodMarker());
@@ -303,13 +244,8 @@ public final class ProducerImpl implements Producer {
     @Override
     public <TReq> void broadcast(BroadcastDescriptor<TReq> descriptor,
                                  TReq broadcastData) throws SerializationException {
-        try (Jedis jedis = producerConfig.getPool().getResource()) {
-            final String serializedData = SerializeHelper.serializeObject(broadcastData);
-            final String channel = "b:" + descriptor.getBroadcastCode();
-            // LOGGER.trace(getProducerIdentity().getIdentifier() + "Broadcasting on channel" + channel);
-            jedis.publish(channel, serializedData);
-            // LOGGER.trace(getProducerIdentity().getIdentifier() + "Did broadcast on channel " + channel);
-        }
+        final String serializedData = SerializeHelper.serializeObject(broadcastData);
+        producerConfig.getMessagingService().broadcast(descriptor, serializedData);
     }
 
     public void shutdown() {

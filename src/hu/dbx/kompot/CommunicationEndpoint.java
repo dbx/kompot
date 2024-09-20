@@ -1,5 +1,6 @@
 package hu.dbx.kompot;
 
+import com.rabbitmq.client.ConnectionFactory;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
 import hu.dbx.kompot.consumer.async.EventReceivingCallback;
@@ -15,28 +16,34 @@ import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.MethodSendingCallback;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
 import hu.dbx.kompot.consumer.sync.handler.SelfDescribingMethodProcessor;
+import hu.dbx.kompot.core.MessagingService;
+import hu.dbx.kompot.core.StatusReportingAction;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.BlockingLifecycle;
 import hu.dbx.kompot.impl.ConsumerImpl;
-import hu.dbx.kompot.impl.DefaultKeyNaming;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
+import hu.dbx.kompot.impl.jedis.DefaultKeyNaming;
+import hu.dbx.kompot.impl.jedis.JedisMessagingService;
+import hu.dbx.kompot.impl.jedis.status.JedisStatusReportingAction;
 import hu.dbx.kompot.impl.producer.ProducerConfig;
+import hu.dbx.kompot.impl.rabbit.RabbitMessagingService;
+import hu.dbx.kompot.impl.rabbit.status.RabbitStatusReportingAction;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
-import hu.dbx.kompot.status.StatusReportingAction;
 import redis.clients.jedis.JedisPool;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
 
 import static java.util.Collections.emptyList;
 
@@ -59,10 +66,7 @@ public final class CommunicationEndpoint {
 
     private final BlockingLifecycle lifecycle = new BlockingLifecycle();
 
-    private final StatusReportingAction statusReportingAction;
-
-    // TODO: make prefix configurable!
-    private static final DefaultKeyNaming naming = DefaultKeyNaming.ofPrefix("moby");
+    private StatusReportingAction statusReportingAction;
 
     /**
      * Constructs a new instance with a default executor service.
@@ -87,7 +91,7 @@ public final class CommunicationEndpoint {
                                                              EventGroupProvider groups,
                                                              ConsumerIdentity serverIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+        return ofRedisConnectionUri(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
                 executor, DEFAULT_LOG_SENSITIVE_DATA_KEYS, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
@@ -99,7 +103,7 @@ public final class CommunicationEndpoint {
                                                              ConsumerIdentity serverIdentity,
                                                              ProducerIdentity producerIdentity,
                                                              ExecutorService executor) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, producerIdentity, executor,
+        return ofRedisConnectionUri(connection, groups, serverIdentity, producerIdentity, executor,
                 DEFAULT_LOG_SENSITIVE_DATA_KEYS, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
@@ -111,7 +115,7 @@ public final class CommunicationEndpoint {
                                                              ConsumerIdentity serverIdentity,
                                                              ExecutorService executor,
                                                              List<String> logSensitiveDataKeys) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+        return ofRedisConnectionUri(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
                 executor, logSensitiveDataKeys, DEFAULT_MAX_EVENT_THREAD_COUNT);
     }
 
@@ -121,11 +125,59 @@ public final class CommunicationEndpoint {
                                                              ExecutorService executor,
                                                              List<String> logSensitiveDataKeys,
                                                              int maxEventThreadCount) {
-        return new CommunicationEndpoint(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
+        return ofRedisConnectionUri(connection, groups, serverIdentity, new ProducerIdentity.RandomUuidIdentity(),
                 executor, logSensitiveDataKeys, maxEventThreadCount);
     }
 
-    private CommunicationEndpoint(URI connection,
+    private static CommunicationEndpoint ofRedisConnectionUri(URI connection,
+                                                              EventGroupProvider groups,
+                                                              ConsumerIdentity serverIdentity,
+                                                              ProducerIdentity producerIdentity,
+                                                              ExecutorService executor,
+                                                              List<String> logSensitiveDataKeys,
+                                                              int maxEventThreadCount) {
+        // TODO: make prefix configurable!
+        final DefaultKeyNaming naming = DefaultKeyNaming.ofPrefix("moby");
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new JedisMessagingService(new JedisPool(connection), serverIdentity, naming),
+                new JedisMessagingService(new JedisPool(connection), serverIdentity, naming), groups, serverIdentity, producerIdentity, executor, logSensitiveDataKeys, maxEventThreadCount);
+        communicationEndpoint.statusReportingAction = new JedisStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
+        return communicationEndpoint;
+    }
+
+    public static CommunicationEndpoint ofRabbitConnectionUri(URI connection,
+                                                              EventGroupProvider groups,
+                                                              ConsumerIdentity serverIdentity,
+                                                              int maxEventThreadCount) throws IOException, TimeoutException, URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
+        final ConnectionFactory factory = createRabbitConnectionFactory(connection);
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(factory.newConnection(), serverIdentity),
+                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
+                Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS), DEFAULT_LOG_SENSITIVE_DATA_KEYS, maxEventThreadCount);
+        communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
+        return communicationEndpoint;
+    }
+
+    public static CommunicationEndpoint ofRabbitConnectionUri(URI connection,
+                                                              EventGroupProvider groups,
+                                                              ConsumerIdentity serverIdentity,
+                                                              ExecutorService executor,
+                                                              List<String> logSensitiveDataKeys,
+                                                              int maxEventThreadCount) throws IOException, TimeoutException, URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
+        final ConnectionFactory factory = createRabbitConnectionFactory(connection);
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(factory.newConnection(), serverIdentity),
+                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
+                executor, logSensitiveDataKeys, maxEventThreadCount);
+        communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
+        return communicationEndpoint;
+    }
+
+    private static ConnectionFactory createRabbitConnectionFactory(URI connection) throws URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
+        final ConnectionFactory factory = new ConnectionFactory();
+        factory.setUri(connection);
+        return factory;
+    }
+
+    private CommunicationEndpoint(MessagingService consumerMessagingService,
+                                  MessagingService producerMessagingService,
                                   EventGroupProvider groups,
                                   ConsumerIdentity serverIdentity,
                                   ProducerIdentity producerIdentity,
@@ -135,15 +187,14 @@ public final class CommunicationEndpoint {
 
         final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
         final ConsumerConfig consumerConfig =
-                new ConsumerConfig(executor, scheduledExecutor, serverIdentity, new JedisPool(connection), naming, logSensitiveDataKeys, maxEventThreadCount);
+                new ConsumerConfig(executor, scheduledExecutor, serverIdentity, consumerMessagingService, logSensitiveDataKeys, maxEventThreadCount);
         final ConsumerHandlers handlers = new ConsumerHandlers(events, events, broadcasts, broadcasts, methods, methods);
 
         final ProducerConfig producerConfig =
-                new ProducerConfig(executor, scheduledExecutor, new JedisPool(connection), naming, producerIdentity);
+                new ProducerConfig(executor, scheduledExecutor, producerMessagingService, producerIdentity);
 
         this.consumer = new ConsumerImpl(consumerConfig, handlers);
         this.producer = new ProducerImpl(producerConfig, groups, this.consumer);
-        this.statusReportingAction = new StatusReportingAction(consumer, this);
     }
 
     /**

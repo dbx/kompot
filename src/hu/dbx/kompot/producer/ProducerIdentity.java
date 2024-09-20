@@ -75,4 +75,5 @@ public interface ProducerIdentity {
      * @return unique identifier string.
      */
     String getIdentifier();
+
 }

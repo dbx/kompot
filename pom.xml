@@ -5,7 +5,7 @@
     <groupId>hu.dbx</groupId>
     <artifactId>kompot</artifactId>
     <packaging>jar</packaging>
-    <version>0.4.15</version>
+    <version>0.5.1</version>
     <name>kompot</name>
     <description>Message queuing for human use.</description>
     <properties>
@@ -14,6 +14,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <testcontainers.version>1.17.6</testcontainers.version>
         <jedis.version>5.1.5</jedis.version>
+        <amqp-client.version>5.21.0</amqp-client.version>
     </properties>
     <build>
         <sourceDirectory>src</sourceDirectory>
@@ -53,6 +54,11 @@
         </plugins>
     </build>
     <dependencies>
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>amqp-client</artifactId>
+            <version>${amqp-client.version}</version>
+        </dependency>
         <dependency>
             <groupId>redis.clients</groupId>
             <artifactId>jedis</artifactId>

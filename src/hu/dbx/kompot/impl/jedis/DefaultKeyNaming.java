@@ -1,6 +1,4 @@
-package hu.dbx.kompot.impl;
-
-import hu.dbx.kompot.core.KeyNaming;
+package hu.dbx.kompot.impl.jedis;
 
 import java.util.UUID;
 

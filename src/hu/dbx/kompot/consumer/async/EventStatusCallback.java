@@ -34,4 +34,8 @@ public interface EventStatusCallback {
      * @throws IllegalStateException iff some other callback function has been called already.
      */
     void error(Throwable e) throws IllegalStateException;
+
+    void markProcessing();
+
+    void setFrame(EventFrame frame);
 }

@@ -38,11 +38,11 @@ public final class MetaDataHolder {
 
     }
 
-    private final String correlationId;
-    private final String userRef;
-    private final String sourceName;
-    private final Long batchId;
-    private final UUID feedbackUuid;
+    private String correlationId;
+    private String userRef;
+    private String sourceName;
+    private Long batchId;
+    private UUID feedbackUuid;
 
     public static MetaDataHolder fromCorrelationId(String correlationId) {
         return new MetaDataHolder(correlationId, null, null, null, null);
@@ -75,6 +75,9 @@ public final class MetaDataHolder {
         return new MetaDataHolder(newCorrId, userRef, sourceName, batchId, feedbackUuid);
     }
 
+    public MetaDataHolder() {
+    }
+
     private MetaDataHolder(String correlationId, String userRef, String sourceName, Long batchId, UUID feedbackUuid) {
         this.correlationId = correlationId;
         this.userRef = userRef;
@@ -101,6 +104,26 @@ public final class MetaDataHolder {
 
     public UUID getFeedbackUuid() {
         return feedbackUuid;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public void setUserRef(String userRef) {
+        this.userRef = userRef;
+    }
+
+    public void setSourceName(String sourceName) {
+        this.sourceName = sourceName;
+    }
+
+    public void setBatchId(Long batchId) {
+        this.batchId = batchId;
+    }
+
+    public void setFeedbackUuid(UUID feedbackUuid) {
+        this.feedbackUuid = feedbackUuid;
     }
 
     @Override

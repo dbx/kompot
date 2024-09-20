@@ -2,35 +2,31 @@ package hu.dbx.kompot.impl;
 
 import hu.dbx.kompot.consumer.Consumer;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
+import hu.dbx.kompot.consumer.Listener;
+import hu.dbx.kompot.consumer.MessageResult;
 import hu.dbx.kompot.consumer.async.EventReceivingCallback;
 import hu.dbx.kompot.consumer.async.handler.EventProcessorAdapter;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastProcessorFactory;
-import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
 import hu.dbx.kompot.consumer.sync.MethodReceivingCallback;
 import hu.dbx.kompot.consumer.sync.handler.DefaultMethodProcessorAdapter;
-import hu.dbx.kompot.core.KeyNaming;
-import hu.dbx.kompot.core.SerializeHelper;
-import hu.dbx.kompot.core.ThreadSafePubSub;
-import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
-import hu.dbx.kompot.status.SelfStatusWriter;
 import org.slf4j.Logger;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
-public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
+public final class ConsumerImpl implements Consumer, Listener {
 
-    /**
-     * Maximum number of event processing threads.
-     * TODO: make it configurable!
-     */
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     /**
@@ -51,94 +47,81 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
         this.consumerHandlers = consumerHandlers;
-        this.pubSub = new ThreadSafePubSub(consumerConfig.getPool(), this);
     }
 
-    private final Map<UUID, Runnable> futures = new ConcurrentHashMap<>();
-
-    private final ThreadSafePubSub pubSub;
+    private final Map<UUID, java.util.function.Consumer<Object>> futures = new ConcurrentHashMap<>();
 
     /**
      * Felregisztral egy future peldanyt es var a valaszra.
      * TODO: timeout parameter is legyen!
      */
-    void registerMessageFuture(UUID messageUuid, Runnable runnable) {
-        futures.put(messageUuid, runnable);
+    void registerMessageFuture(UUID messageUuid, java.util.function.Consumer<Object> consumer) {
+        futures.put(messageUuid, consumer);
     }
 
     private final CountDownLatch startLatch = new CountDownLatch(1);
     private final CountDownLatch stopLatch = new CountDownLatch(1);
 
-
     @Override
-    public void onSubscribe(String channel, int subscribedChannels) {
-        if (subscribedChannels == getPubSubChannels().length) {
-            startLatch.countDown();
-        }
+    public void afterStarted() {
+        startLatch.countDown();
     }
 
     @Override
-    public void onUnsubscribe(String channel, int subscribedChannels) {
-        if (0 == subscribedChannels) {
-            stopLatch.countDown();
-        }
+    public void afterStopped() {
+        stopLatch.countDown();
     }
 
     @Override
-    public void onMessage(String channel, String message) {
+    public MessageResult onMessage(String channel, Object message) {
+        final UUID messageUuid = consumerConfig.getMessagingService().getMessageUuid(message);
         // itt ki kell talalni h kinek adom tovabb.
+
         if (channel.startsWith("b:")) {
             final String broadcastCode = channel.substring(2);
-            LOGGER.info("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
-            submitToExecutor(new BroadcastRunnable(broadcastCode, message));
+            LOGGER.debug("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
+            submitToExecutor(new BroadcastRunnable(broadcastCode, (String) message, consumerHandlers));
         } else if (channel.startsWith("e:")) {
-            startEventProcessing(UUID.fromString(message));
+            LOGGER.debug("Received event {} on channel {}, trying to start event.", messageUuid, channel);
+            return startEventProcessing(message);
         } else if (channel.startsWith("m:")) {                 // uzenet keres
-            LOGGER.trace("Received message {} on channel {}, trying to start method.", message, channel);
+            LOGGER.debug("Received method {} on channel {}, trying to start method.", messageUuid, channel);
             try {
-                MethodRunnable runnable = new MethodRunnable(ConsumerImpl.this, consumerConfig, methodEventListeners, consumerHandlers, UUID.fromString(message));
+                MethodRunnable runnable = new MethodRunnable(this, methodEventListeners, consumerHandlers, message);
                 submitToExecutor(runnable);
             } catch (RejectedExecutionException rejected) {
                 LOGGER.error("Could not start execution, executor service rejected. maybe too much?");
             }
-        } else if (channel.startsWith("id:") && futures.containsKey(UUID.fromString(message))) {
+        } else if (channel.startsWith("id:") && futures.containsKey(messageUuid)) {
             // TODO: a response mar nem ide jon!
-            LOGGER.debug("Receiving method response: {} => {}", channel, message);
-            futures.remove(UUID.fromString(message)).run();
+            LOGGER.debug("Receiving method response: {} => {}", channel, messageUuid);
+            futures.remove(messageUuid).accept(message);
         } else {
-            LOGGER.error("Unexpected message on channel {} => {}", channel, message);
+            LOGGER.error("Unexpected message on channel {} => {}", channel, messageUuid);
         }
+
+        return MessageResult.PROCESSING;
     }
 
     public void startDaemonThread() throws InterruptedException {
-        pubSub.startWithChannels(getPubSubChannels());
+        final Set<String> supportedBroadcastCodes = consumerHandlers.getBroadcastProcessorFactory().getSupportedBroadcasts()
+                .stream().map(BroadcastDescriptor::getBroadcastCode).collect(Collectors.toSet());
+        getConsumerConfig().getMessagingService().start(this, supportedBroadcastCodes);
 
         startLatch.await();
 
         // we start processing earlier events.
         LOGGER.trace("started daemon thread.");
 
-        // ez fogja a modul statuszat rendszeresen beleirni.
-        SelfStatusWriter.start(consumerConfig);
-
-        // There may be unprocessed events in the queue so we start to process it on as many threads as possible
-        for (int i = 1; i < consumerConfig.getMaxEventThreadCount() + 1; i++) {
-            // csak azert noveljuk, mert az after event runnable csokkenteni fogja!
-            processingEvents.incrementAndGet();
-
-            // inditunk egy feldolgozast, hatha
-            submitToExecutorTrampoline(new AfterEventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventReceivingCallbacks));
-        }
+        getConsumerConfig().getMessagingService().afterStarted(this, processingEvents, consumerHandlers, eventReceivingCallbacks);
     }
 
     public void shutdown() {
         try {
-            pubSub.unsubscrubeAllAndStop();
+            getConsumerConfig().getMessagingService().stop();
             stopLatch.await();
-
-            SelfStatusWriter.delete(consumerConfig);
-
-        } catch (InterruptedException e) {
+            getConsumerConfig().getMessagingService().afterStopped(consumerConfig);
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
@@ -146,11 +129,6 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
     @Override
     public ConsumerIdentity getConsumerIdentity() {
         return consumerConfig.getConsumerIdentity();
-    }
-
-    @Override
-    public KeyNaming getKeyNaming() {
-        return consumerConfig.getNaming();
     }
 
     @Override
@@ -169,121 +147,36 @@ public final class ConsumerImpl implements Consumer, ThreadSafePubSub.Listener {
     }
 
     /**
-     * Osszeszedi az osszes figyelt csatornat.
-     */
-    private String[] getPubSubChannels() {
-        List<String> channels = new LinkedList<>();
-
-        // nekem cimzett esemenyek
-        channels.add("e:" + getConsumerIdentity().getEventGroup());
-
-        // nekem cimzett metodusok
-        channels.add("m:" + getConsumerIdentity().getMessageGroup());
-
-        // tamogatott broadcast uzenet tipusok
-        consumerHandlers.getBroadcastProcessorFactory().getSupportedBroadcasts().forEach(b -> channels.add("b:" + b.getBroadcastCode()));
-
-        // szemelyesen nekem cimzett visszajelzesek
-        channels.add("id:" + getConsumerIdentity().getIdentifier());
-
-        return channels.toArray(new String[]{});
-    }
-
-    private final class BroadcastRunnable implements Runnable {
-        private final String broadcastCode;
-        private final String data;
-
-        private BroadcastRunnable(String broadcastCode, String data) {
-            this.broadcastCode = broadcastCode;
-            this.data = data;
-        }
-
-        @SuppressWarnings({"unchecked", "rawtypes"})
-        @Override
-        public void run() {
-            final Optional<BroadcastDescriptor> descriptor = consumerHandlers.getBroadcastDescriptorResolver().resolveMarker(broadcastCode);
-            if (!descriptor.isPresent()) {
-                LOGGER.error("Did not find descriptor for broadcast code {}", broadcastCode);
-                return;
-            }
-            try {
-                LOGGER.debug("Deserializing broadcast data...");
-                final Object dataObj = SerializeHelper.deserializeBroadcast(consumerHandlers.getBroadcastDescriptorResolver(), broadcastCode, data);
-                LOGGER.debug("Deserialized broadcast data of type {}", dataObj.getClass());
-
-                Optional<SelfDescribingBroadcastProcessor> factory = consumerHandlers.getBroadcastProcessorFactory().create(descriptor.get());
-                if (!factory.isPresent()) {
-                    // ez elvileg nem lehetseges, mert csak azokra iratkozunk fel, amikre tudunk is figyelni.
-                    LOGGER.error("Illegalis allapot, nincsen broadcast a keresett '{}' tipusra!", broadcastCode);
-                } else {
-                    LOGGER.debug("Handling broadcast {}", broadcastCode);
-                    factory.get().handle(dataObj);
-                    LOGGER.debug("Successfully handled broadcast {}", broadcastCode);
-                }
-            } catch (DeserializationException e) {
-                LOGGER.error("Could not deserialize broadcast payload for code {} and data {}", broadcastCode, data);
-            } catch (Throwable t) {
-                LOGGER.error("Error handling broadcast code=" + broadcastCode + " data=" + data, t);
-            }
-        }
-    }
-
-    /**
      * Elindit egy esemeny feldolgozast, ha egyelore nincsen tobb feldolgozo, mint MAX_EVENTS.
      *
-     * @param eventUuid - uuid of event to process
+     * @param message - message of event to process
      * @throws IllegalArgumentException   if eventUuid is null
      * @throws RejectedExecutionException ha az executor nem tudja megenni az esemenyt
      */
-    private void startEventProcessing(UUID eventUuid) {
-        if (eventUuid == null) {
+    private MessageResult startEventProcessing(Object message) {
+        final UUID messageUuid = consumerConfig.getMessagingService().getMessageUuid(message);
+
+        if (message == null) {
             throw new IllegalArgumentException("can not start processing event will null uuid!");
         } else if (processingEvents.incrementAndGet() <= consumerConfig.getMaxEventThreadCount()) {
             try {
-                submitToExecutorTrampoline(new EventRunnable(this, consumerConfig, processingEvents, consumerHandlers, eventUuid, eventReceivingCallbacks));
+                submitToExecutor(new EventRunnable(this, processingEvents, consumerHandlers, message, eventReceivingCallbacks));
             } catch (RejectedExecutionException e) {
-                LOGGER.debug("Could not execute event of id {}", eventUuid);
+                LOGGER.debug("Could not execute event of message {}", messageUuid);
                 processingEvents.decrementAndGet();
                 throw e;
             }
         } else {
-            LOGGER.debug("Can not start executing event of id {} - queue is full.", eventUuid);
+            LOGGER.debug("Can not start executing event of message {} - max event thread count reached.", messageUuid);
             processingEvents.decrementAndGet();
+            return MessageResult.REJECTED;
         }
-    }
 
-    private void submitToExecutorTrampoline(Trampoline trampoline) {
-        submitToExecutor(new TrampolineRunner(trampoline));
+        return MessageResult.PROCESSING;
     }
 
     private void submitToExecutor(Runnable runnable) {
         consumerConfig.getExecutor().execute(runnable);
-    }
-
-    interface Trampoline {
-        Trampoline jump();
-    }
-
-    // kap egy trampoline peldanyt es megprobalja megfuttatni.
-    public final static class TrampolineRunner implements Runnable {
-        private Trampoline trampoline;
-
-        TrampolineRunner(Trampoline t) {
-            trampoline = t;
-        }
-
-        @Override
-        public void run() {
-            try {
-                LOGGER.trace("Started trampoline.");
-                while (trampoline != null) {
-                    trampoline = trampoline.jump();
-                }
-                LOGGER.trace("Exited trampoline.");
-            } catch (Throwable t) {
-                LOGGER.error("Error on trampoline=" + trampoline, t);
-            }
-        }
     }
 
     public void addMethodReceivingCallback(MethodReceivingCallback callback) {
