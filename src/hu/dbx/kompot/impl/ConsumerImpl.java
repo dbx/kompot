@@ -74,14 +74,18 @@ public final class ConsumerImpl implements Consumer, Listener {
 
     @Override
     public MessageResult onMessage(String channel, Object message) {
-        final UUID messageUuid = consumerConfig.getMessagingService().getMessageUuid(message);
         // itt ki kell talalni h kinek adom tovabb.
 
         if (channel.startsWith("b:")) {
             final String broadcastCode = channel.substring(2);
             LOGGER.debug("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
             submitToExecutor(new BroadcastRunnable(broadcastCode, (String) message, consumerHandlers));
-        } else if (channel.startsWith("e:")) {
+            return MessageResult.PROCESSING;
+        }
+
+        final UUID messageUuid = consumerConfig.getMessagingService().getMessageUuid(message);
+
+        if (channel.startsWith("e:")) {
             LOGGER.debug("Received event {} on channel {}, trying to start event.", messageUuid, channel);
             return startEventProcessing(message);
         } else if (channel.startsWith("m:")) {                 // uzenet keres
