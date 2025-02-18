@@ -1,5 +1,6 @@
 package hu.dbx.kompot;
 
+import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.async.EventDescriptor;
@@ -21,6 +22,7 @@ import hu.dbx.kompot.core.StatusReportingAction;
 import hu.dbx.kompot.exceptions.SerializationException;
 import hu.dbx.kompot.impl.BlockingLifecycle;
 import hu.dbx.kompot.impl.ConsumerImpl;
+import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.impl.ProducerImpl;
 import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
@@ -35,6 +37,7 @@ import hu.dbx.kompot.producer.EventGroupProvider;
 import hu.dbx.kompot.producer.ProducerIdentity;
 import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusReporter;
+import org.slf4j.Logger;
 import redis.clients.jedis.JedisPool;
 
 import java.io.IOException;
@@ -52,6 +55,8 @@ import static java.util.Collections.emptyList;
  */
 @SuppressWarnings("WeakerAccess")
 public final class CommunicationEndpoint {
+
+    private static final Logger LOGGER = LoggerUtils.getLogger();
 
     public static final int DEFAULT_EXECUTOR_THREADS = 12;
     public static final List<String> DEFAULT_LOG_SENSITIVE_DATA_KEYS = emptyList();
@@ -147,10 +152,10 @@ public final class CommunicationEndpoint {
     public static CommunicationEndpoint ofRabbitConnectionUri(URI connection,
                                                               EventGroupProvider groups,
                                                               ConsumerIdentity serverIdentity,
-                                                              int maxEventThreadCount) throws IOException, TimeoutException, URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
+                                                              int maxEventThreadCount) throws URISyntaxException, NoSuchAlgorithmException, KeyManagementException, InterruptedException {
         final ConnectionFactory factory = createRabbitConnectionFactory(connection);
-        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(factory.newConnection(), serverIdentity),
-                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(getNewConnection(factory), serverIdentity),
+                new RabbitMessagingService(getNewConnection(factory), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
                 Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS), DEFAULT_LOG_SENSITIVE_DATA_KEYS, maxEventThreadCount);
         communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
         return communicationEndpoint;
@@ -161,10 +166,10 @@ public final class CommunicationEndpoint {
                                                               ConsumerIdentity serverIdentity,
                                                               ExecutorService executor,
                                                               List<String> logSensitiveDataKeys,
-                                                              int maxEventThreadCount) throws IOException, TimeoutException, URISyntaxException, NoSuchAlgorithmException, KeyManagementException {
+                                                              int maxEventThreadCount) throws URISyntaxException, NoSuchAlgorithmException, KeyManagementException, InterruptedException {
         final ConnectionFactory factory = createRabbitConnectionFactory(connection);
-        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(factory.newConnection(), serverIdentity),
-                new RabbitMessagingService(factory.newConnection(), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(getNewConnection(factory), serverIdentity),
+                new RabbitMessagingService(getNewConnection(factory), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
                 executor, logSensitiveDataKeys, maxEventThreadCount);
         communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
         return communicationEndpoint;
@@ -174,6 +179,17 @@ public final class CommunicationEndpoint {
         final ConnectionFactory factory = new ConnectionFactory();
         factory.setUri(connection);
         return factory;
+    }
+
+    // az auto recovery csak akkor működik, ha egyszer legalább sikerül a kapcsolatnak létre jönnie
+    private static Connection getNewConnection(final ConnectionFactory factory) throws InterruptedException {
+        try {
+            return factory.newConnection();
+        } catch (IOException | TimeoutException e) {
+            LOGGER.error("Could not get rabbit mq connection!", e);
+            Thread.sleep(5000L);
+            return getNewConnection(factory);
+        }
     }
 
     private CommunicationEndpoint(MessagingService consumerMessagingService,

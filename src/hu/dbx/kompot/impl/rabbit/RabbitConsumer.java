@@ -68,17 +68,17 @@ public class RabbitConsumer implements Runnable {
         channel.basicQos(1, false); // prefetch limit per consumer
         channel.basicQos(1, true); // prefetch limit per channel
 
-        final Map<String, Object> args = new HashMap<>();
-        args.put("x-dead-letter-exchange", "");
-        args.put("x-dead-letter-routing-key", asyncQueueName);
-        args.put("x-message-ttl", 3000);
-        channel.queueDeclare(asyncStandByQueueName, true, false, false, args);
+        final Map<String, Object> asyncStandByQueueArgs = new HashMap<>();
+        asyncStandByQueueArgs.put("x-dead-letter-exchange", "");
+        asyncStandByQueueArgs.put("x-dead-letter-routing-key", asyncQueueName);
+        asyncStandByQueueArgs.put("x-message-ttl", 3000);
+        channel.queueDeclare(asyncStandByQueueName, true, false, false, asyncStandByQueueArgs);
 
-        args.clear();
-        args.put("x-max-priority", Priority.getHighestPriority().score);
-        args.put("x-dead-letter-exchange", "");
-        args.put("x-dead-letter-routing-key", asyncStandByQueueName);
-        channel.queueDeclare(asyncQueueName, true, false, false, args);
+        final Map<String, Object> asyncQueueArgs = new HashMap<>();
+        asyncQueueArgs.put("x-max-priority", Priority.getHighestPriority().score);
+        asyncQueueArgs.put("x-dead-letter-exchange", "");
+        asyncQueueArgs.put("x-dead-letter-routing-key", asyncStandByQueueName);
+        channel.queueDeclare(asyncQueueName, true, false, false, asyncQueueArgs);
         channel.basicConsume(asyncQueueName, false, getDeliverCallback(channel), consumerTag -> {
         });
 

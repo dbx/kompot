@@ -31,7 +31,7 @@ public enum Priority {
     public static Priority getHighestPriority() {
         return Arrays.stream(Priority.values())
                 .max(Comparator.comparing(it -> it.score))
-                .orElse(null);
+                .orElse(Priority.HIGH);
     }
 
 }
