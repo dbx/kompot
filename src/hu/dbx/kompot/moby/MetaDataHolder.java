@@ -2,6 +2,7 @@ package hu.dbx.kompot.moby;
 
 import org.apache.commons.lang3.builder.ToStringStyle;
 
+import java.util.Set;
 import java.util.UUID;
 
 public final class MetaDataHolder {
@@ -36,6 +37,11 @@ public final class MetaDataHolder {
          */
         SOURCE_NAME,
 
+        /**
+         * User roles who initiated this event.
+         */
+        USER_ROLES,
+
     }
 
     private String correlationId;
@@ -43,47 +49,53 @@ public final class MetaDataHolder {
     private String sourceName;
     private Long batchId;
     private UUID feedbackUuid;
+    private Set<String> userRoles;
 
     public static MetaDataHolder fromCorrelationId(String correlationId) {
-        return new MetaDataHolder(correlationId, null, null, null, null);
+        return new MetaDataHolder(correlationId, null, null, null, null, null);
     }
 
     public static MetaDataHolder fromUserRef(String userRef) {
-        return new MetaDataHolder(null, userRef, null, null, null);
+        return new MetaDataHolder(null, userRef, null, null, null, null);
     }
 
     public static MetaDataHolder fromSourceName(String sourceName) {
-        return new MetaDataHolder(null, null, sourceName, null, null);
+        return new MetaDataHolder(null, null, sourceName, null, null, null);
     }
 
     public static MetaDataHolder build(String correlationId, String userRef, String sourceName, Long batchId) {
-        return new MetaDataHolder(correlationId, userRef, sourceName, batchId, null);
+        return new MetaDataHolder(correlationId, userRef, sourceName, batchId, null, null);
     }
 
     public MetaDataHolder withBatchId(Long newBatchId) {
-        return new MetaDataHolder(correlationId, userRef, sourceName, newBatchId, feedbackUuid);
+        return new MetaDataHolder(correlationId, userRef, sourceName, newBatchId, feedbackUuid, userRoles);
     }
 
     public MetaDataHolder withFeedbackUuid(UUID newFeedbackUuid) {
-        return new MetaDataHolder(correlationId, userRef, sourceName, batchId, newFeedbackUuid);
+        return new MetaDataHolder(correlationId, userRef, sourceName, batchId, newFeedbackUuid, userRoles);
+    }
+
+    public MetaDataHolder withUserRoles(Set<String> newUserRoles) {
+        return new MetaDataHolder(correlationId, userRef, sourceName, batchId, feedbackUuid, newUserRoles);
     }
 
     /**
      * Returns a new copy with correlation id overridden.
      */
     public MetaDataHolder withCorrelationId(String newCorrId) {
-        return new MetaDataHolder(newCorrId, userRef, sourceName, batchId, feedbackUuid);
+        return new MetaDataHolder(newCorrId, userRef, sourceName, batchId, feedbackUuid, userRoles);
     }
 
     public MetaDataHolder() {
     }
 
-    private MetaDataHolder(String correlationId, String userRef, String sourceName, Long batchId, UUID feedbackUuid) {
+    private MetaDataHolder(String correlationId, String userRef, String sourceName, Long batchId, UUID feedbackUuid, Set<String> userRoles) {
         this.correlationId = correlationId;
         this.userRef = userRef;
         this.sourceName = sourceName;
         this.batchId = batchId;
         this.feedbackUuid = feedbackUuid;
+        this.userRoles = userRoles;
     }
 
     public String getCorrelationId() {
@@ -126,6 +138,14 @@ public final class MetaDataHolder {
         this.feedbackUuid = feedbackUuid;
     }
 
+    public Set<String> getUserRoles() {
+        return userRoles;
+    }
+
+    public void setUserRoles(Set<String> userRoles) {
+        this.userRoles = userRoles;
+    }
+
     @Override
     public String toString() {
         return new org.apache.commons.lang3.builder.ToStringBuilder(this, ToStringStyle.NO_CLASS_NAME_STYLE)
@@ -134,6 +154,7 @@ public final class MetaDataHolder {
                 .append("sourceName", sourceName)
                 .append("batchId", batchId)
                 .append("feedbackUuid", feedbackUuid)
+                .append("userRoles", userRoles)
                 .toString();
     }
 }

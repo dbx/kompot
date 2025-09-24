@@ -12,6 +12,7 @@ import hu.dbx.kompot.impl.DataHandling;
 import hu.dbx.kompot.impl.LoggerUtils;
 import hu.dbx.kompot.moby.MetaDataHolder;
 import hu.dbx.kompot.producer.ProducerIdentity;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.Transaction;
@@ -89,6 +90,7 @@ public final class JedisHelper {
         final String sourceName = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.SOURCE_NAME.name());
         final String batchIdStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.BATCH_ID.name());
         final String feedbackUuidStr = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.FEEDBACK_UUID.name());
+        final String userRoles = jedis.hget(detailsKey, MetaDataHolder.MetaDataFields.USER_ROLES.name());
 
         MetaDataHolder meta = MetaDataHolder.build(corrId, userRef, sourceName, null);
 
@@ -98,6 +100,10 @@ public final class JedisHelper {
 
         if (feedbackUuidStr != null && !feedbackUuidStr.trim().isEmpty()) {
             meta = meta.withFeedbackUuid(UUID.fromString(feedbackUuidStr.trim()));
+        }
+
+        if (userRoles != null && !userRoles.trim().isEmpty()) {
+            meta = meta.withUserRoles(new HashSet<>(Arrays.asList(userRoles.split(","))));
         }
 
         return meta;
@@ -216,6 +222,9 @@ public final class JedisHelper {
             }
             if (metaData.getFeedbackUuid() != null) {
                 store.hsetnx(detailsKey, MetaDataHolder.MetaDataFields.FEEDBACK_UUID.name(), metaData.getFeedbackUuid().toString());
+            }
+            if (metaData.getUserRoles() != null) {
+                store.hsetnx(detailsKey, MetaDataHolder.MetaDataFields.USER_ROLES.name(), StringUtils.join(metaData.getUserRoles(), ","));
             }
         }
     }
