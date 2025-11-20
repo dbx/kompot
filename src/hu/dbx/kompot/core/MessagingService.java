@@ -14,6 +14,7 @@ import hu.dbx.kompot.impl.consumer.ConsumerConfig;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
 import hu.dbx.kompot.impl.producer.ProducerConfig;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -24,7 +25,7 @@ public interface MessagingService {
 
     void start(Listener listener, Set<String> supportedBroadcastCodes) throws InterruptedException;
 
-    void stop() throws InterruptedException;
+    void stop() throws InterruptedException, IOException;
 
     void afterStarted(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks);
 
@@ -53,5 +54,7 @@ public interface MessagingService {
     void sendMethodRespond(Object response, Object message, MethodRequestFrame<?> mrf, Throwable throwable);
 
     UUID getMessageUuid(Object message);
+
+    boolean isConnected();
 
 }

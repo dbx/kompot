@@ -55,8 +55,9 @@ public class RabbitMessagingService implements MessagingService {
     }
 
     @Override
-    public void stop() {
+    public void stop() throws IOException {
         rabbitConsumer.stop();
+        connection.close();
     }
 
     @Override
@@ -234,6 +235,11 @@ public class RabbitMessagingService implements MessagingService {
             LOGGER.error("Could not get message uuid from message ({}) {}", message, e);
             return null;
         }
+    }
+
+    @Override
+    public boolean isConnected() {
+        return connection.isOpen();
     }
 
 }

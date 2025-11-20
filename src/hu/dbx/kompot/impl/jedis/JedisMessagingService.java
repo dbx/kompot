@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import java.util.List;
 import java.util.Optional;
@@ -293,6 +294,15 @@ public class JedisMessagingService implements MessagingService {
         } catch (Exception e) {
             LOGGER.error("Could not get message uuid from message ({}) {}", message, e);
             return null;
+        }
+    }
+
+    @Override
+    public boolean isConnected() {
+        try (Jedis ignored = pool.getResource()) {
+            return true;
+        } catch (JedisConnectionException e) {
+            return false;
         }
     }
 

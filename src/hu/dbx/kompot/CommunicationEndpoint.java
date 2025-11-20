@@ -376,4 +376,9 @@ public final class CommunicationEndpoint {
     public List<StatusReport> findGlobalStatuses() throws IllegalStateException {
         return lifecycle.doWhenRunningGet(statusReportingAction::findGlobalStatuses);
     }
+
+    public boolean isConnected() {
+        return consumer.getConsumerConfig().getMessagingService().isConnected();
+    }
+
 }
