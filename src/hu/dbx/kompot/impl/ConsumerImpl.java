@@ -18,11 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 public final class ConsumerImpl implements Consumer, Listener {
@@ -35,7 +31,7 @@ public final class ConsumerImpl implements Consumer, Listener {
      * We use this counter to separate the thread pool to two parts:
      * one for event handling and one for methods + broadcasts.
      */
-    private final AtomicInteger processingEvents = new AtomicInteger(0);
+    private final Semaphore processingEvents;
 
     private final ConsumerHandlers consumerHandlers;
     private final ConsumerConfig consumerConfig;
@@ -47,6 +43,7 @@ public final class ConsumerImpl implements Consumer, Listener {
     public ConsumerImpl(ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) {
         this.consumerConfig = consumerConfig;
         this.consumerHandlers = consumerHandlers;
+        this.processingEvents = new Semaphore(consumerConfig.getMaxEventThreadCount());
     }
 
     private final Map<UUID, java.util.function.Consumer<Object>> futures = new ConcurrentHashMap<>();
@@ -79,7 +76,7 @@ public final class ConsumerImpl implements Consumer, Listener {
         if (channel.startsWith("b:")) {
             final String broadcastCode = channel.substring(2);
             LOGGER.debug("Received Broadcast of code {} for {}", broadcastCode, consumerConfig.getConsumerIdentity().getIdentifier());
-            submitToExecutor(new BroadcastRunnable(broadcastCode, (String) message, consumerHandlers));
+            submitToExecutor(new BroadcastRunnable(broadcastCode, message, consumerHandlers, consumerConfig.getMessagingService()));
             return MessageResult.PROCESSING;
         }
 
@@ -117,7 +114,7 @@ public final class ConsumerImpl implements Consumer, Listener {
         // we start processing earlier events.
         LOGGER.trace("started daemon thread.");
 
-        getConsumerConfig().getMessagingService().afterStarted(this, processingEvents, consumerHandlers, eventReceivingCallbacks);
+        getConsumerConfig().getMessagingService().afterStarted(this);
     }
 
     public void shutdown() {
@@ -161,18 +158,16 @@ public final class ConsumerImpl implements Consumer, Listener {
         final UUID messageUuid = consumerConfig.getMessagingService().getMessageUuid(message);
 
         if (message == null) {
-            throw new IllegalArgumentException("can not start processing event will null uuid!");
-        } else if (processingEvents.incrementAndGet() <= consumerConfig.getMaxEventThreadCount()) {
-            try {
-                submitToExecutor(new EventRunnable(this, processingEvents, consumerHandlers, message, eventReceivingCallbacks));
-            } catch (RejectedExecutionException e) {
-                LOGGER.debug("Could not execute event of message {}", messageUuid);
-                processingEvents.decrementAndGet();
-                throw e;
-            }
-        } else {
-            LOGGER.debug("Can not start executing event of message {} - max event thread count reached.", messageUuid);
-            processingEvents.decrementAndGet();
+            LOGGER.error("can not start processing event will null uuid!");
+            return MessageResult.ERROR;
+        }
+
+        try {
+            processingEvents.acquireUninterruptibly();
+            submitToExecutor(new EventRunnable(this, processingEvents, consumerHandlers, message, eventReceivingCallbacks));
+        } catch (RejectedExecutionException e) {
+            LOGGER.debug("Could not execute event of message {}", messageUuid);
+            processingEvents.release();
             return MessageResult.REJECTED;
         }
 

@@ -11,14 +11,14 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Semaphore;
 
 // csokkenti a folyamatban levo eventek szamat.
 public final class EventRunnable implements Runnable {
 
     private final ConsumerImpl consumer;
     private final ConsumerConfig consumerConfig;
-    private final AtomicInteger processingEvents;
+    private final Semaphore processingEvents;
     private final ConsumerHandlers consumerHandlers;
     private final Object message;
     private final List<EventReceivingCallback> eventReceivingCallbacks;
@@ -27,7 +27,7 @@ public final class EventRunnable implements Runnable {
 
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
-    public EventRunnable(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, Object message, List<EventReceivingCallback> eventReceivingCallbacks) {
+    public EventRunnable(ConsumerImpl consumer, Semaphore processingEvents, ConsumerHandlers consumerHandlers, Object message, List<EventReceivingCallback> eventReceivingCallbacks) {
         this.consumer = consumer;
         this.consumerConfig = consumer.getConsumerConfig();
         this.processingEvents = processingEvents;
@@ -89,6 +89,8 @@ public final class EventRunnable implements Runnable {
             LOGGER.error("Error during handing event=" + messageUuid, t);
 
             throw t;
+        } finally {
+            messagingService.afterMessageProcessed(message);
         }
     }
 }

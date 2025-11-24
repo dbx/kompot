@@ -1,6 +1,5 @@
 package hu.dbx.kompot.impl.jedis;
 
-import hu.dbx.kompot.consumer.ConsumerIdentity;
 import hu.dbx.kompot.consumer.Listener;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
@@ -71,34 +70,13 @@ public final class ThreadSafePubSub implements Runnable {
     /**
      * Starts this component by subscribint to the given set of channels.
      */
-    public synchronized void startWithChannels(ConsumerIdentity consumerIdentity, Set<String> supportedBroadcastCodes) throws InterruptedException {
+    public synchronized void startWithChannels(List<String> pubSubChannels) throws InterruptedException {
 
-        subscribed.addAll(Arrays.asList(getPubSubChannels(consumerIdentity, supportedBroadcastCodes)));
+        subscribed.addAll(pubSubChannels);
 
         daemonThread.start();
 
         startLatch.await();
-    }
-
-    /**
-     * Osszeszedi az osszes figyelt csatornat.
-     */
-    private String[] getPubSubChannels(ConsumerIdentity consumerIdentity, Set<String> supportedBroadcastCodes) {
-        List<String> channels = new LinkedList<>();
-
-        // nekem cimzett esemenyek
-        channels.add("e:" + consumerIdentity.getEventGroup());
-
-        // nekem cimzett metodusok
-        channels.add("m:" + consumerIdentity.getMessageGroup());
-
-        // tamogatott broadcast uzenet tipusok
-        supportedBroadcastCodes.forEach(broadcastCode -> channels.add("b:" + broadcastCode));
-
-        // szemelyesen nekem cimzett visszajelzesek
-        channels.add("id:" + consumerIdentity.getIdentifier());
-
-        return channels.toArray(new String[]{});
     }
 
     @Override

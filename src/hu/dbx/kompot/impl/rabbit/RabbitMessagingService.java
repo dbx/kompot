@@ -27,8 +27,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static hu.dbx.kompot.impl.DataHandling.Statuses.ERROR;
 import static hu.dbx.kompot.impl.DataHandling.Statuses.PROCESSED;
@@ -41,27 +41,33 @@ public class RabbitMessagingService implements MessagingService {
 
     private final Connection connection;
     private final ConsumerIdentity consumerIdentity;
+    private final int maxEventThreadCount;
     private RabbitConsumer rabbitConsumer;
+    private RabbitAsyncConsumer rabbitAsyncConsumer;
 
-    public RabbitMessagingService(Connection connection, ConsumerIdentity consumerIdentity) {
+    public RabbitMessagingService(Connection connection, ConsumerIdentity consumerIdentity, int maxEventThreadCount) {
         this.connection = connection;
         this.consumerIdentity = consumerIdentity;
+        this.maxEventThreadCount = maxEventThreadCount;
     }
 
     @Override
     public void start(Listener listener, Set<String> supportedBroadcastCodes) throws InterruptedException {
         this.rabbitConsumer = new RabbitConsumer(connection, listener, consumerIdentity, supportedBroadcastCodes);
+        this.rabbitAsyncConsumer = new RabbitAsyncConsumer(connection, listener, consumerIdentity, supportedBroadcastCodes, maxEventThreadCount);
         rabbitConsumer.start();
+        rabbitAsyncConsumer.start();
     }
 
     @Override
     public void stop() throws IOException {
         rabbitConsumer.stop();
+        rabbitAsyncConsumer.stop();
         connection.close();
     }
 
     @Override
-    public void afterStarted(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
+    public void afterStarted(ConsumerImpl consumer) {
     }
 
     @Override
@@ -128,8 +134,8 @@ public class RabbitMessagingService implements MessagingService {
     }
 
     @Override
-    public void afterEvent(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
-        processingEvents.decrementAndGet();
+    public void afterEvent(ConsumerImpl consumer, Semaphore processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
+        processingEvents.release();
     }
 
     @Override
@@ -240,6 +246,29 @@ public class RabbitMessagingService implements MessagingService {
     @Override
     public boolean isConnected() {
         return connection.isOpen();
+    }
+
+    @Override
+    public void afterMessageProcessed(Object message) {
+        final Delivery delivery = ((Delivery) message);
+        final String messageType = delivery.getProperties().getType();
+        if (messageType.startsWith("e:")) {
+            rabbitAsyncConsumer.acknowledgeDelivery(delivery);
+        } else {
+            rabbitConsumer.acknowledgeDelivery(delivery);
+        }
+    }
+
+    @Override
+    public Object getBroadcastData(Object message) {
+        final Delivery delivery = ((Delivery) message);
+        return new String(delivery.getBody(), StandardCharsets.UTF_8);
+    }
+
+    @Override
+    public void stopConsuming() {
+        rabbitConsumer.stopConsuming();
+        rabbitAsyncConsumer.stopConsuming();
     }
 
 }

@@ -159,6 +159,7 @@ public final class ProducerImpl implements Producer {
             response.completeExceptionally(e);
         } finally {
             // TODO: torojuk rediszbol ami ott maradt.
+            producerConfig.getMessagingService().afterMessageProcessed(message);
         }
     }
 

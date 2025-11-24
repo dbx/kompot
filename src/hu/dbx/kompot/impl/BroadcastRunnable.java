@@ -2,6 +2,7 @@ package hu.dbx.kompot.impl;
 
 import hu.dbx.kompot.consumer.broadcast.handler.BroadcastDescriptor;
 import hu.dbx.kompot.consumer.broadcast.handler.SelfDescribingBroadcastProcessor;
+import hu.dbx.kompot.core.MessagingService;
 import hu.dbx.kompot.core.SerializeHelper;
 import hu.dbx.kompot.exceptions.DeserializationException;
 import hu.dbx.kompot.impl.consumer.ConsumerHandlers;
@@ -14,13 +15,15 @@ public final class BroadcastRunnable implements Runnable {
     private static final Logger LOGGER = LoggerUtils.getLogger();
 
     private final String broadcastCode;
-    private final String data;
+    private final Object message;
     private final ConsumerHandlers consumerHandlers;
+    private final MessagingService messagingService;
 
-    public BroadcastRunnable(String broadcastCode, String data, ConsumerHandlers consumerHandlers) {
+    public BroadcastRunnable(String broadcastCode, Object message, ConsumerHandlers consumerHandlers, MessagingService messagingService) {
         this.broadcastCode = broadcastCode;
-        this.data = data;
+        this.message = message;
         this.consumerHandlers = consumerHandlers;
+        this.messagingService = messagingService;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -31,6 +34,7 @@ public final class BroadcastRunnable implements Runnable {
             LOGGER.error("Did not find descriptor for broadcast code {}", broadcastCode);
             return;
         }
+        final String data = (String) messagingService.getBroadcastData(message);
         try {
             LOGGER.debug("Deserializing broadcast data...");
             final Object dataObj = SerializeHelper.deserializeBroadcast(consumerHandlers.getBroadcastDescriptorResolver(), broadcastCode, data);
@@ -49,6 +53,8 @@ public final class BroadcastRunnable implements Runnable {
             LOGGER.error("Could not deserialize broadcast payload for code {} and data {}", broadcastCode, data);
         } catch (Throwable t) {
             LOGGER.error("Error handling broadcast code=" + broadcastCode + " data=" + data, t);
+        } finally {
+            messagingService.afterMessageProcessed(message);
         }
     }
 

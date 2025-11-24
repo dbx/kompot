@@ -28,11 +28,8 @@ import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.Transaction;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.*;
+import java.util.concurrent.Semaphore;
 
 import static hu.dbx.kompot.impl.DataHandling.EventKeys.STATUS;
 import static hu.dbx.kompot.impl.DataHandling.MethodResponseKeys.RESPONSE;
@@ -47,6 +44,7 @@ public class JedisMessagingService implements MessagingService {
     private final ConsumerIdentity consumerIdentity;
     private final KeyNaming keyNaming;
     private ThreadSafePubSub pubSub;
+    private ThreadSafePubSub eventPubSub;
 
     public JedisMessagingService(JedisPool pool, ConsumerIdentity consumerIdentity, KeyNaming keyNaming) {
         this.pool = pool;
@@ -57,25 +55,44 @@ public class JedisMessagingService implements MessagingService {
     @Override
     public void start(Listener listener, Set<String> supportedBroadcastCodes) throws InterruptedException {
         this.pubSub = new ThreadSafePubSub(pool, listener);
-        pubSub.startWithChannels(consumerIdentity, supportedBroadcastCodes);
+        pubSub.startWithChannels(getPubSubChannels(consumerIdentity, supportedBroadcastCodes));
+
+        this.eventPubSub = new ThreadSafePubSub(pool, listener);
+        eventPubSub.startWithChannels(Collections.singletonList("e:" + consumerIdentity.getEventGroup())); // nekem cimzett esemenyek
+    }
+
+    /**
+     * Osszeszedi az osszes figyelt csatornat.
+     */
+    private List<String> getPubSubChannels(ConsumerIdentity consumerIdentity, Set<String> supportedBroadcastCodes) {
+        List<String> channels = new LinkedList<>();
+
+        // nekem cimzett metodusok
+        channels.add("m:" + consumerIdentity.getMessageGroup());
+
+        // tamogatott broadcast uzenet tipusok
+        supportedBroadcastCodes.forEach(broadcastCode -> channels.add("b:" + broadcastCode));
+
+        // szemelyesen nekem cimzett visszajelzesek
+        channels.add("id:" + consumerIdentity.getIdentifier());
+
+        return channels;
     }
 
     @Override
     public void stop() throws InterruptedException {
         pubSub.unsubscrubeAllAndStop();
+        eventPubSub.unsubscrubeAllAndStop();
     }
 
     @Override
-    public void afterStarted(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
+    public void afterStarted(ConsumerImpl consumer) {
         SelfStatusWriter.start(consumer.getConsumerConfig());
 
         // There may be unprocessed events in the queue so we start to process it on as many threads as possible
         for (int i = 1; i < consumer.getConsumerConfig().getMaxEventThreadCount() + 1; i++) {
-            // csak azert noveljuk, mert a runNextEvent csokkenteni fogja!
-            processingEvents.incrementAndGet();
-
             // inditunk egy feldolgozast, hatha
-            runNextEvent(consumer, processingEvents, consumerHandlers, eventReceivingCallbacks);
+            findNextEvent().ifPresent(uuid -> consumer.onMessage("e:" + consumerIdentity.getEventGroup(), uuid.toString()));
         }
     }
 
@@ -141,8 +158,13 @@ public class JedisMessagingService implements MessagingService {
     }
 
     @Override
-    public void afterEvent(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
-        runNextEvent(consumer, processingEvents, consumerHandlers, eventReceivingCallbacks);
+    public void afterEvent(ConsumerImpl consumer, Semaphore processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
+        final Optional<UUID> eventUuid = findNextEvent();
+        if (eventUuid.isPresent()) {
+            submitToExecutor(consumer.getConsumerConfig(), new EventRunnable(consumer, processingEvents, consumerHandlers, eventUuid.get().toString(), eventReceivingCallbacks));
+        } else {
+            processingEvents.release();
+        }
     }
 
     @Override
@@ -306,6 +328,21 @@ public class JedisMessagingService implements MessagingService {
         }
     }
 
+    @Override
+    public void afterMessageProcessed(Object message) {
+
+    }
+
+    @Override
+    public Object getBroadcastData(Object message) {
+        return message;
+    }
+
+    @Override
+    public void stopConsuming() {
+        // TODO
+    }
+
     /**
      * Visszaadja egy metodushivas statuszat uuid alapjan.
      *
@@ -321,18 +358,6 @@ public class JedisMessagingService implements MessagingService {
             return Optional.empty();
         } else {
             return Optional.of(DataHandling.Statuses.valueOf(statusString));
-        }
-    }
-
-    private void runNextEvent(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks) {
-        final Optional<UUID> eventUuid = findNextEvent();
-        if (eventUuid.isPresent()) {
-            submitToExecutor(consumer.getConsumerConfig(), new EventRunnable(consumer, processingEvents, consumerHandlers, eventUuid.get().toString(), eventReceivingCallbacks));
-        } else {
-            final int afterDecrement = processingEvents.decrementAndGet();
-            if (afterDecrement < 0) {
-                throw new IllegalStateException("Processing Events counter must not ever get negative: " + afterDecrement);
-            }
         }
     }
 

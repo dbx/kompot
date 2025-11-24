@@ -68,6 +68,7 @@ final class MethodRunnable implements Runnable {
             }
         } finally {
             messagingService.sendMethodRespond(response, message, mrf, throwable);
+            messagingService.afterMessageProcessed(message);
         }
     }
 

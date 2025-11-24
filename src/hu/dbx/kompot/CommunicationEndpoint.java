@@ -154,8 +154,8 @@ public final class CommunicationEndpoint {
                                                               ConsumerIdentity serverIdentity,
                                                               int maxEventThreadCount) throws URISyntaxException, NoSuchAlgorithmException, KeyManagementException, InterruptedException {
         final ConnectionFactory factory = createRabbitConnectionFactory(connection);
-        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(getNewConnection(factory), serverIdentity),
-                new RabbitMessagingService(getNewConnection(factory), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(getNewConnection(factory), serverIdentity, maxEventThreadCount),
+                new RabbitMessagingService(getNewConnection(factory), serverIdentity, maxEventThreadCount), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
                 Executors.newFixedThreadPool(DEFAULT_EXECUTOR_THREADS), DEFAULT_LOG_SENSITIVE_DATA_KEYS, maxEventThreadCount);
         communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
         return communicationEndpoint;
@@ -168,8 +168,8 @@ public final class CommunicationEndpoint {
                                                               List<String> logSensitiveDataKeys,
                                                               int maxEventThreadCount) throws URISyntaxException, NoSuchAlgorithmException, KeyManagementException, InterruptedException {
         final ConnectionFactory factory = createRabbitConnectionFactory(connection);
-        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(getNewConnection(factory), serverIdentity),
-                new RabbitMessagingService(getNewConnection(factory), serverIdentity), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
+        final CommunicationEndpoint communicationEndpoint = new CommunicationEndpoint(new RabbitMessagingService(getNewConnection(factory), serverIdentity, maxEventThreadCount),
+                new RabbitMessagingService(getNewConnection(factory), serverIdentity, maxEventThreadCount), groups, serverIdentity, new ProducerIdentity.CustomIdentity(serverIdentity.getIdentifier()),
                 executor, logSensitiveDataKeys, maxEventThreadCount);
         communicationEndpoint.statusReportingAction = new RabbitStatusReportingAction(communicationEndpoint.consumer, communicationEndpoint);
         return communicationEndpoint;
@@ -379,6 +379,10 @@ public final class CommunicationEndpoint {
 
     public boolean isConnected() {
         return consumer.getConsumerConfig().getMessagingService().isConnected();
+    }
+
+    public void stopConsuming() {
+        consumer.getConsumerConfig().getMessagingService().stopConsuming();
     }
 
 }

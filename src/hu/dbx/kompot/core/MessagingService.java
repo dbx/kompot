@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Semaphore;
 
 public interface MessagingService {
 
@@ -27,7 +27,7 @@ public interface MessagingService {
 
     void stop() throws InterruptedException, IOException;
 
-    void afterStarted(ConsumerImpl consumer, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks);
+    void afterStarted(ConsumerImpl consumer);
 
     void afterStopped(ConsumerConfig consumerConfig);
 
@@ -39,7 +39,7 @@ public interface MessagingService {
 
     EventStatusCallback getEventStatusCallback(Object message, List<EventReceivingCallback> eventReceivingCallbacks);
 
-    void afterEvent(ConsumerImpl consumerImpl, AtomicInteger processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks);
+    void afterEvent(ConsumerImpl consumerImpl, Semaphore processingEvents, ConsumerHandlers consumerHandlers, List<EventReceivingCallback> eventReceivingCallbacks);
 
     Optional<EventFrame<?>> getEventFrame(Object message, ConsumerConfig consumerConfig, ConsumerHandlers consumerHandlers) throws Exception;
 
@@ -56,5 +56,11 @@ public interface MessagingService {
     UUID getMessageUuid(Object message);
 
     boolean isConnected();
+
+    void afterMessageProcessed(Object message);
+
+    Object getBroadcastData(Object message);
+
+    void stopConsuming();
 
 }
