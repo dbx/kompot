@@ -257,4 +257,8 @@ public final class ProducerImpl implements Producer {
     public ProducerIdentity getProducerIdentity() {
         return producerConfig.getProducerIdentity();
     }
+
+    public ProducerConfig getProducerConfig() {
+        return producerConfig;
+    }
 }

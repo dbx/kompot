@@ -378,7 +378,7 @@ public final class CommunicationEndpoint {
     }
 
     public boolean isConnected() {
-        return consumer.getConsumerConfig().getMessagingService().isConnected();
+        return consumer.getConsumerConfig().getMessagingService().isConnected() && producer.getProducerConfig().getMessagingService().isConnected();
     }
 
     public void stopConsuming() {
