@@ -245,7 +245,7 @@ public class RabbitMessagingService implements MessagingService {
 
     @Override
     public boolean isConnected() {
-        return connection.isOpen();
+        return connection.isOpen() && rabbitAsyncConsumer.isOpen() && rabbitConsumer.isOpen();
     }
 
     @Override

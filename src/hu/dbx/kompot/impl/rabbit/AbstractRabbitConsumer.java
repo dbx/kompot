@@ -10,7 +10,6 @@ import hu.dbx.kompot.impl.LoggerUtils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 abstract class AbstractRabbitConsumer implements Runnable {
@@ -96,6 +95,10 @@ abstract class AbstractRabbitConsumer implements Runnable {
         } catch (Throwable throwable) {
             LOGGER.error(throwable.getMessage());
         }
+    }
+
+    public boolean isOpen() {
+        return channel.isOpen();
     }
 
 }
