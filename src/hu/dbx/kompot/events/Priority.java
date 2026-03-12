@@ -34,4 +34,25 @@ public enum Priority {
                 .orElse(Priority.HIGH);
     }
 
+    public static Priority getPriorityByScore(int score) {
+        return Arrays.stream(Priority.values())
+                .filter(it -> it.score == score)
+                .findFirst()
+                .orElse(Priority.LOW);
+    }
+
+    public static Priority getPriorityByIndex(int idx) {
+        if (idx < 100) {
+            return Priority.BATCH;
+        } else if (idx < 1000) {
+            return Priority.BATCH100;
+        } else if (idx < 10000) {
+            return Priority.BATCH1000;
+        } else if (idx < 100000) {
+            return Priority.BATCH10000;
+        } else {
+            return Priority.BATCH100000;
+        }
+    }
+
 }
