@@ -98,7 +98,7 @@ abstract class AbstractRabbitConsumer implements Runnable {
     }
 
     public boolean isOpen() {
-        return channel.isOpen();
+        return channel != null && channel.isOpen();
     }
 
 }
