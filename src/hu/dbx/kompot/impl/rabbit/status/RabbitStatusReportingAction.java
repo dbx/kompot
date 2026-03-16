@@ -8,12 +8,13 @@ import hu.dbx.kompot.status.StatusReport;
 import hu.dbx.kompot.status.StatusRequestBroadcastHandler;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RabbitStatusReportingAction extends AbstractStatusReportingAction {
 
     private final int TWENTY_SECONDS = 20 * 1000;
 
-    private final Map<UUID, StatusReport> statusReports = new HashMap<>();
+    private final Map<UUID, StatusReport> statusReports = new ConcurrentHashMap<>();
 
     public RabbitStatusReportingAction(ConsumerImpl consumer, CommunicationEndpoint endpoint) {
         super(consumer, endpoint);
