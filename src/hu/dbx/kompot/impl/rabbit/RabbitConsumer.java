@@ -29,7 +29,7 @@ public class RabbitConsumer extends AbstractRabbitConsumer {
         channel.basicQos(12, false); // prefetch limit per consumer
         channel.basicQos(12, true); // prefetch limit per channel
 
-        channel.queueDeclare(syncQueueName, false, false, true, null);
+        channel.queueDeclare(syncQueueName, true, false, true, null);
         syncQueueConsumerTag = channel.basicConsume(syncQueueName, false, getDeliverCallback(channel), consumerTag -> {
         });
 
